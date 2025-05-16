@@ -44,6 +44,13 @@ if not api_key:
 # Initialize the OpenAI client properly
 client = OpenAI(api_key=api_key)
 
+# Check for HTTP_PROXY environment variables that might cause issues
+http_proxy = os.environ.get('HTTP_PROXY') or os.environ.get('http_proxy')
+https_proxy = os.environ.get('HTTPS_PROXY') or os.environ.get('https_proxy')
+if http_proxy or https_proxy:
+    logger.warning("HTTP_PROXY or HTTPS_PROXY environment variables are set, which might cause issues with OpenAI client.")
+    logger.warning("If you encounter proxy-related errors, consider unsetting these variables.")
+
 # Store feedback data
 FEEDBACK_FILE = os.path.join(os.path.dirname(__file__), 'feedback_data.json')
 
