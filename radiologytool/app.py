@@ -7,6 +7,7 @@ import openai
 import re
 import logging
 from logging.handlers import RotatingFileHandler
+from openai import OpenAI
 
 # Set up logging with a file handler to ensure logs are written to the file
 log_file = os.path.join(os.path.dirname(__file__), 'translations_log.txt')
@@ -40,7 +41,9 @@ api_key = os.environ.get("OPENAI_API_KEY")
 if not api_key:
     logger.error("No OpenAI API key found. Please set the OPENAI_API_KEY in key.env file or as environment variable.")
     raise ValueError("No OpenAI API key found. Please set the OPENAI_API_KEY in key.env file or as environment variable.")
-openai.api_key = api_key
+
+# Initialize the OpenAI client properly
+client = OpenAI(api_key=api_key)
 
 # Store feedback data
 FEEDBACK_FILE = os.path.join(os.path.dirname(__file__), 'feedback_data.json')
@@ -97,7 +100,7 @@ def translate_radiology_impression(impression):
     and identify what symptoms typically match these findings.
     """
     try:
-        response = openai.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a doctor explaining radiology results to a patient. "
