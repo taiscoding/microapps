@@ -35,10 +35,11 @@ app = Blueprint('radiology', __name__,
                 template_folder='templates',
                 static_folder='static')
 
-# Configure OpenAI with explicit API key
-api_key = os.getenv("OPENAI_API_KEY")
+# Configure OpenAI with explicit API key - check both direct env var and key.env file
+api_key = os.environ.get("OPENAI_API_KEY")
 if not api_key:
-    raise ValueError("No OpenAI API key found. Please set the OPENAI_API_KEY in key.env file.")
+    logger.error("No OpenAI API key found. Please set the OPENAI_API_KEY in key.env file or as environment variable.")
+    raise ValueError("No OpenAI API key found. Please set the OPENAI_API_KEY in key.env file or as environment variable.")
 openai.api_key = api_key
 
 # Store feedback data
