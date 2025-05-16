@@ -79,7 +79,8 @@ def save_feedback(feedback_data):
 def format_translation(text):
     """
     Format the translation by adding proper HTML tags and styling.
-    Also removes any remaining conversational lead-ins.
+    Also removes any remaining conversational lead-ins and ensures
+    technical terms have explanations in parentheses.
     """
     # Remove common conversational lead-ins
     lead_ins = [
@@ -107,6 +108,41 @@ def format_translation(text):
                 if text:
                     text = text[0].upper() + text[1:]
                 break
+    
+    # Import the medical terms dictionary from utils
+    from radiologytool.utils import COMMON_MEDICAL_TERMS
+    
+    # Ensure every medical term has an explanation in parentheses if not already present
+    # This is a backup in case the model doesn't follow instructions
+    for term, explanation in COMMON_MEDICAL_TERMS.items():
+        # Only check for standalone terms (surrounded by spaces, punctuation, or at start/end)
+        term_pattern = r'\b' + re.escape(term) + r'\b(?!\s*[\(\{])'
+        match = re.search(term_pattern, text, re.IGNORECASE)
+        if match:
+            # The term exists without an explanation in parentheses
+            replacement = f"{match.group(0)} (which means {explanation})"
+            text = re.sub(term_pattern, replacement, text, flags=re.IGNORECASE)
+    
+    # Also check for any anatomical levels not followed by explanations
+    # Common spinal levels
+    spinal_levels = {
+        r'\bL[1-5]-[LS][1-5]\b': 'which is in the lower back',
+        r'\bT[1-9][0-2]?-T[1-9][0-2]?\b': 'which is in the middle back',
+        r'\bC[1-7]-C[1-7]\b': 'which is in the neck',
+        r'\bL[1-5]\b': 'which is a vertebra in the lower back',
+        r'\bT[1-9][0-2]?\b': 'which is a vertebra in the middle back',
+        r'\bC[1-7]\b': 'which is a vertebra in the neck',
+        r'\bS[1-5]\b': 'which is in the sacrum (base of the spine)'
+    }
+    
+    # Add explanations to spinal levels not already explained
+    for level_pattern, explanation in spinal_levels.items():
+        # Only match if not followed by parentheses
+        pattern = level_pattern + r'(?!\s*[\(\{])'
+        matches = re.finditer(pattern, text)
+        for match in matches:
+            replacement = f"{match.group(0)} ({explanation})"
+            text = text[:match.start()] + replacement + text[match.end():]
     
     # Find the symptoms section
     pattern = r"RELATED SYMPTOMS:(.+?)$"
@@ -150,12 +186,17 @@ def translate_radiology_impression(impression):
                                             "Your response needs to be in TWO sections:\n\n"
                                             "1. First, explain what the findings mean in VERY simple, friendly language at a 6th grade reading level (ages 11-12).\n"
                                             "2. Second, add the heading 'RELATED SYMPTOMS:' and list what symptoms might be connected to these findings.\n\n"
+                                            "CRITICAL FORMAT REQUIREMENT: For EVERY medical term, anatomical abbreviation, or level (such as L4-L5), you MUST include the technical term first, IMMEDIATELY followed by a plain-language explanation in parentheses, like this:\n"
+                                            "- 'L4-L5 (which is the lower part of your back)'\n"
+                                            "- 'C6-C7 (which is the lower part of your neck)'\n"
+                                            "- 'stenosis (narrowing of a passage)'\n\n"
+                                            "Apply this format to ALL technical terms and abbreviations. Do not assume any prior medical knowledge. If multiple terms appear together, clarify each one separately.\n\n"
                                             "Guidelines for explanation:\n"
                                             "- Start directly with the explanation - NO introductory phrases\n"
                                             "- Use EXTREMELY simple words a 6th grader would understand\n"
                                             "- Keep sentences short (10-15 words maximum)\n"
                                             "- Use everyday examples when possible (e.g., 'the disc in your back is like a cushion between bones')\n"
-                                            "- NEVER use medical terms without explaining them immediately (e.g., 'stenosis, which means narrowing')\n"
+                                            "- ALWAYS include the technical term followed by a simple explanation in parentheses\n"
                                             "- Be warm and reassuring without being conversational\n"
                                             "- Use words like 'small,' 'little,' or 'mild' when appropriate to prevent unnecessary worry\n"
                                             "- Keep explanations brief, 3-4 sentences maximum\n\n"
@@ -163,9 +204,10 @@ def translate_radiology_impression(impression):
                                             "- After a clear heading 'RELATED SYMPTOMS:'\n"
                                             "- List 2-3 simple symptoms using bullet points (•)\n"
                                             "- Explain each symptom in VERY simple terms\n"
+                                            "- Continue using technical terms with explanations in parentheses in the symptoms section too\n"
                                             "- Connect symptoms to the findings using simple cause-effect language"
                 },
-                {"role": "user", "content": f"Explain this radiology report in the simplest possible terms. Start your explanation directly WITHOUT any introductory phrases: {impression}"}
+                {"role": "user", "content": f"Explain this radiology report in the simplest possible terms. Start your explanation directly WITHOUT any introductory phrases. Remember to include EVERY technical term with a plain-language explanation in parentheses immediately after: {impression}"}
             ],
             temperature=0.3,
             max_tokens=1000
