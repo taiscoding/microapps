@@ -2,6 +2,7 @@ from flask import Flask, render_template, redirect, url_for
 import os
 import sys
 import logging
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -11,6 +12,11 @@ logger = logging.getLogger(__name__)
 sys.path.append(os.path.join(os.path.dirname(__file__), 'radiologytool'))
 
 app = Flask(__name__)
+
+# Add a context processor to make 'now' available in all templates
+@app.context_processor
+def inject_now():
+    return {'now': datetime.now()}
 
 @app.route('/')
 def index():
