@@ -1,0 +1,51 @@
+/* Additional styling for the Radiology Translator tool */
+
+.jumbotron {
+    background-color: #e9ecef;
+    padding: 2rem;
+    border-radius: 0.3rem;
+    margin-bottom: 2rem;
+}
+
+.card {
+    transition: transform 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+}
+
+.example-btn {
+    text-align: left;
+    white-space: normal;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.translation-box {
+    animation: fadeIn 0.5s;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Medical dictionary tooltip styles */
+.medical-term {
+    text-decoration: underline dotted;
+    cursor: help;
+    color: #0d6efd;
+}
+
+/* Responsive adjustments */
+@media (max-width: 576px) {
+    .container {
+        padding: 0 1rem;
+    }
+    
+    body {
+        padding-top: 1rem;
+    }
+} 

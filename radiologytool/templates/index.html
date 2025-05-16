@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Radiology Translator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <style>
+        body {
+            padding-top: 2rem;
+            background-color: #f8f9fa;
+        }
+        .container {
+            max-width: 800px;
+        }
+        .translation-box {
+            border-left: 4px solid #0d6efd;
+            padding: 1rem;
+            background-color: #f0f7ff;
+            border-radius: 0.25rem;
+            margin-top: 1rem;
+            display: none;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 1rem 0;
+        }
+        .footer {
+            margin-top: 3rem;
+            text-align: center;
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        .feedback-section {
+            border-top: 1px solid #dee2e6;
+            margin-top: 1.5rem;
+            padding-top: 1rem;
+            display: none;
+        }
+        .feedback-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        .feedback-button {
+            background: none;
+            border: 1px solid #dee2e6;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .feedback-button:hover {
+            transform: scale(1.1);
+        }
+        .feedback-button.selected {
+            background-color: #e9ecef;
+            border-color: #0d6efd;
+        }
+        .thumbs-up {
+            color: #198754;
+            font-size: 1.5rem;
+        }
+        .thumbs-down {
+            color: #dc3545;
+            font-size: 1.5rem;
+        }
+        .feedback-success {
+            display: none;
+            text-align: center;
+            color: #198754;
+            margin: 1rem 0;
+        }
+        .symptoms-header {
+            margin-top: 1.5rem;
+            font-weight: bold;
+            color: #6c757d;
+            border-top: 1px dashed #dee2e6;
+            padding-top: 1rem;
+        }
+        .translation-content {
+            line-height: 1.6;
+        }
+        .translation-content p {
+            margin-bottom: 1rem;
+        }
+        .translation-content ul {
+            padding-left: 1.5rem;
+        }
+        .translation-content li {
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center mb-4">Radiology Translator</h1>
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <p class="card-text">This tool converts technical radiology impressions into easy-to-understand language and identifies related symptoms.</p>
+                
+                <form id="translationForm">
+                    <div class="mb-3">
+                        <label for="impression" class="form-label">Radiology Impression:</label>
+                        <textarea class="form-control" id="impression" name="impression" rows="6" placeholder="Paste the radiology impression from your report here..."></textarea>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">Translate</button>
+                    </div>
+                </form>
+                
+                <div class="loading">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Translating your report...</p>
+                </div>
+                
+                <div id="translationResult" class="translation-box">
+                    <h5>Patient-Friendly Explanation:</h5>
+                    <div id="translation" class="translation-content"></div>
+                    
+                    <!-- Feedback Section -->
+                    <div id="feedbackSection" class="feedback-section">
+                        <h6 class="text-center mb-3">Was this translation helpful?</h6>
+                        <div class="feedback-buttons">
+                            <button type="button" class="feedback-button" id="thumbsUpBtn" aria-label="Thumbs Up">
+                                <i class="bi bi-hand-thumbs-up-fill thumbs-up"></i>
+                            </button>
+                            <button type="button" class="feedback-button" id="thumbsDownBtn" aria-label="Thumbs Down">
+                                <i class="bi bi-hand-thumbs-down-fill thumbs-down"></i>
+                            </button>
+                        </div>
+                        <div class="mb-3">
+                            <label for="feedbackComment" class="form-label">Additional Comments (optional):</label>
+                            <textarea class="form-control" id="feedbackComment" rows="2" placeholder="Tell us what you think about this translation..."></textarea>
+                        </div>
+                        <div class="d-grid">
+                            <button type="button" id="submitFeedbackBtn" class="btn btn-outline-primary">Submit Feedback</button>
+                        </div>
+                        <div id="feedbackSuccess" class="feedback-success">
+                            <i class="bi bi-check-circle-fill me-2"></i>Thank you for your feedback!
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-4 shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">Sample Radiology Impressions</h5>
+                <p class="card-text">Try these examples:</p>
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-secondary btn-sm example-btn" type="button">
+                        MRI of the lumbar spine demonstrates mild disc desiccation and a 4mm posterior disc protrusion at L4-L5 resulting in mild central canal stenosis and moderate left neural foraminal narrowing.
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm example-btn" type="button">
+                        Chest X-ray showing no acute cardiopulmonary abnormality. Lungs are clear bilaterally. Heart size is normal.
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>This tool is for educational purposes only. Always consult with your healthcare provider about your medical reports.</p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('translationForm');
+            const loadingIndicator = document.querySelector('.loading');
+            const translationResult = document.getElementById('translationResult');
+            const translationContent = document.getElementById('translation');
+            const exampleButtons = document.querySelectorAll('.example-btn');
+            const impressionTextarea = document.getElementById('impression');
+            const feedbackSection = document.getElementById('feedbackSection');
+            const thumbsUpBtn = document.getElementById('thumbsUpBtn');
+            const thumbsDownBtn = document.getElementById('thumbsDownBtn');
+            const feedbackComment = document.getElementById('feedbackComment');
+            const submitFeedbackBtn = document.getElementById('submitFeedbackBtn');
+            const feedbackSuccess = document.getElementById('feedbackSuccess');
+            
+            // Store translation data
+            let currentTranslation = {
+                id: null,
+                originalText: '',
+                translatedText: '',
+                rating: null
+            };
+            
+            // Handle form submission
+            form.addEventListener('submit', async function(event) {
+                event.preventDefault();
+                
+                const impression = impressionTextarea.value.trim();
+                
+                if (!impression) {
+                    alert('Please enter a radiology impression to translate.');
+                    return;
+                }
+                
+                // Reset feedback
+                resetFeedback();
+                
+                // Show loading indicator
+                loadingIndicator.style.display = 'block';
+                translationResult.style.display = 'none';
+                
+                try {
+                    const response = await fetch('/translate', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: new URLSearchParams({
+                            'impression': impression
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        // Store the current translation data
+                        currentTranslation.id = data.translation_id;
+                        currentTranslation.originalText = impression;
+                        currentTranslation.translatedText = data.translation;
+                        
+                        // Set HTML content instead of text
+                        translationContent.innerHTML = data.translation;
+                        translationResult.style.display = 'block';
+                        
+                        // Show feedback section
+                        feedbackSection.style.display = 'block';
+                    } else {
+                        alert('Error: ' + (data.error || 'Failed to translate impression'));
+                    }
+                } catch (error) {
+                    alert('An error occurred while processing your request.');
+                    console.error(error);
+                } finally {
+                    loadingIndicator.style.display = 'none';
+                }
+            });
+            
+            // Handle thumbs up/down
+            thumbsUpBtn.addEventListener('click', function() {
+                setRating('thumbs_up');
+            });
+            
+            thumbsDownBtn.addEventListener('click', function() {
+                setRating('thumbs_down');
+            });
+            
+            // Set the selected rating
+            function setRating(rating) {
+                // Update current rating
+                currentTranslation.rating = rating;
+                
+                // Update UI
+                if (rating === 'thumbs_up') {
+                    thumbsUpBtn.classList.add('selected');
+                    thumbsDownBtn.classList.remove('selected');
+                } else {
+                    thumbsUpBtn.classList.remove('selected');
+                    thumbsDownBtn.classList.add('selected');
+                }
+            }
+            
+            // Handle feedback submission
+            submitFeedbackBtn.addEventListener('click', async function() {
+                if (!currentTranslation.rating) {
+                    alert('Please select thumbs up or thumbs down before submitting.');
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/feedback', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            translation_id: currentTranslation.id,
+                            original: currentTranslation.originalText,
+                            translation: currentTranslation.translatedText,
+                            rating: currentTranslation.rating,
+                            comment: feedbackComment.value.trim()
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        // Show success message
+                        feedbackSuccess.style.display = 'block';
+                        
+                        // Disable submit button
+                        submitFeedbackBtn.disabled = true;
+                        
+                        // Disable rating buttons
+                        thumbsUpBtn.disabled = true;
+                        thumbsDownBtn.disabled = true;
+                        feedbackComment.disabled = true;
+                    } else {
+                        alert('Error: ' + (data.error || 'Failed to submit feedback'));
+                    }
+                } catch (error) {
+                    alert('An error occurred while submitting your feedback.');
+                    console.error(error);
+                }
+            });
+            
+            // Reset feedback UI
+            function resetFeedback() {
+                // Reset data
+                currentTranslation.rating = null;
+                
+                // Reset UI
+                thumbsUpBtn.classList.remove('selected');
+                thumbsDownBtn.classList.remove('selected');
+                feedbackComment.value = '';
+                feedbackSuccess.style.display = 'none';
+                
+                // Enable controls
+                submitFeedbackBtn.disabled = false;
+                thumbsUpBtn.disabled = false;
+                thumbsDownBtn.disabled = false;
+                feedbackComment.disabled = false;
+            }
+            
+            // Handle example button clicks
+            exampleButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    // Get the impression text
+                    impressionTextarea.value = this.textContent.trim();
+                    impressionTextarea.focus();
+                });
+            });
+        });
+    </script>
+</body>
+</html> 
