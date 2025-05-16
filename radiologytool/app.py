@@ -123,23 +123,58 @@ def format_translation(text):
             replacement = f"{match.group(0)} (which means {explanation})"
             text = re.sub(term_pattern, replacement, text, flags=re.IGNORECASE)
     
-    # Also check for any anatomical levels not followed by explanations
-    # Common spinal levels
-    spinal_levels = {
+    # Common anatomical locations and terms dictionary
+    anatomical_terms = {
+        # Spine
         r'\bL[1-5]-[LS][1-5]\b': 'which is in the lower back',
         r'\bT[1-9][0-2]?-T[1-9][0-2]?\b': 'which is in the middle back',
         r'\bC[1-7]-C[1-7]\b': 'which is in the neck',
         r'\bL[1-5]\b': 'which is a vertebra in the lower back',
         r'\bT[1-9][0-2]?\b': 'which is a vertebra in the middle back',
         r'\bC[1-7]\b': 'which is a vertebra in the neck',
-        r'\bS[1-5]\b': 'which is in the sacrum (base of the spine)'
+        r'\bS[1-5]\b': 'which is in the sacrum (base of the spine)',
+        
+        # Brain
+        r'\bfrontal lobe\b': 'which is the front part of the brain that controls thinking and movement',
+        r'\btemporal lobe\b': 'which is the side part of the brain that helps with hearing and memory',
+        r'\bparietal lobe\b': 'which is the top part of the brain that processes sensations',
+        r'\boccipital lobe\b': 'which is the back part of the brain that processes vision',
+        r'\bcerebellum\b': 'which is the lower back part of the brain that controls balance and coordination',
+        r'\bbrainstem\b': 'which connects the brain to the spinal cord and controls basic functions like breathing',
+        
+        # Chest
+        r'\bpulmonary\b': 'which relates to the lungs',
+        r'\baorta\b': 'which is the main blood vessel carrying blood from your heart',
+        r'\bventricle\b': 'which is a chamber of the heart',
+        r'\batrium\b': 'which is an upper chamber of the heart',
+        r'\bbronch(i|us)\b': 'which are the airways in the lungs',
+        
+        # Abdomen
+        r'\bhepatobiliary\b': 'which relates to the liver and bile ducts',
+        r'\bpancreas\b': 'which is an organ behind your stomach that helps with digestion',
+        r'\bspleen\b': 'which is an organ near your stomach that helps fight infection',
+        r'\bkidney\b': 'which filters waste from your blood',
+        r'\bgallbladder\b': 'which stores bile from your liver to help with digestion',
+        r'\bcolon\b': 'which is the large intestine',
+        
+        # Common conditions
+        r'\batrophy\b': 'which means shrinkage',
+        r'\bhypertrophy\b': 'which means enlargement',
+        r'\bstenosis\b': 'which means narrowing',
+        r'\binfarct\b': 'which is an area of damaged tissue due to lack of blood flow',
+        r'\blesion\b': 'which is an abnormal area of tissue',
+        r'\bnodule\b': 'which is a small rounded lump',
+        r'\beffusion\b': 'which is a buildup of fluid',
+        r'\bedema\b': 'which is swelling due to excess fluid',
+        r'\bhemorrhage\b': 'which is bleeding',
+        r'\bischemia\b': 'which means reduced blood flow'
     }
     
-    # Add explanations to spinal levels not already explained
-    for level_pattern, explanation in spinal_levels.items():
+    # Add explanations to anatomical terms not already explained
+    for term_pattern, explanation in anatomical_terms.items():
         # Only match if not followed by parentheses
-        pattern = level_pattern + r'(?!\s*[\(\{])'
-        matches = re.finditer(pattern, text)
+        pattern = term_pattern + r'(?!\s*[\(\{])'
+        matches = re.finditer(pattern, text, re.IGNORECASE)
         for match in matches:
             replacement = f"{match.group(0)} ({explanation})"
             text = text[:match.start()] + replacement + text[match.end():]
@@ -181,28 +216,33 @@ def translate_radiology_impression(impression):
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are explaining radiology results to a patient who might be worried or confused. "
-                                            "Your job is to make complex medical findings easy to understand.\n\n"
-                                            "IMPORTANT: Start your response directly with the explanation. DO NOT use any introductory phrases like 'Sure!', 'Here's an explanation:', 'I can help with that!', etc.\n\n"
-                                            "TEMPLATE EXAMPLE: Follow this exact format for your explanation:\n"
-                                            "\"There is some mild wear and tear in the disc between two bones in the lower part of your back (called L4–L5). The disc is bulging a little and making the space where your nerves pass through a bit tighter, especially on the left side.\"\n\n"
-                                            "REQUIRED FORMAT STRUCTURE:\n"
-                                            "1. Start with a plain-language description of what was found\n"
-                                            "2. Include technical terms in parentheses with simple explanations\n"
-                                            "3. Clearly state the effect or consequence in simple terms\n"
-                                            "4. Use short sentences (10-15 words)\n"
-                                            "5. Avoid measurements unless absolutely necessary\n"
-                                            "6. Do not use any unexplained medical terms\n\n"
+                                            "Your job is to make complex medical findings easy to understand for ALL types of radiology findings.\n\n"
+                                            "IMPORTANT: Start your response directly with the explanation. DO NOT use any introductory phrases.\n\n"
+                                            "REQUIRED STRUCTURE FOR ALL FINDINGS (regardless of body part):\n"
+                                            "1. Start with a plain-language summary of the finding\n"
+                                            "2. Immediately include the technical term or location in parentheses with a simple explanation\n"
+                                            "3. Explain what effect or consequence this has in plain terms\n"
+                                            "4. Use short sentences and avoid unexplained medical jargon\n\n"
+                                            "EXAMPLES FOR DIFFERENT BODY REGIONS:\n\n"
+                                            "SPINE EXAMPLE:\n"
+                                            "\"There is some wear and tear in the disc between two bones in your lower back (called L4–L5, which is the lower part of your back). The disc is bulging a little and making the space where your nerves pass through a bit tighter, especially on the left side.\"\n\n"
+                                            "BRAIN EXAMPLE:\n"
+                                            "\"There is a small area of tissue damage in your brain (called an infarct, which means an area where blood flow was blocked). This is located in the part of your brain that controls movement on your right side (called the left motor cortex).\"\n\n"
+                                            "CHEST EXAMPLE:\n"
+                                            "\"Your lungs look clear with no signs of infection or fluid buildup (called pulmonary edema). Your heart is normal sized and the large blood vessels (called the aorta and pulmonary arteries) appear normal.\"\n\n"
+                                            "ABDOMEN EXAMPLE:\n"
+                                            "\"Your liver is slightly enlarged (called hepatomegaly). This could be related to some fatty tissue in the liver (called fatty liver or steatosis), which is common and often doesn't cause problems.\"\n\n"
                                             "Your response needs to be in TWO sections:\n\n"
-                                            "1. First, explain what the findings mean following the template example above.\n"
+                                            "1. First, explain what the findings mean following the required structure above, adapting to the appropriate body region.\n"
                                             "2. Second, add the heading 'RELATED SYMPTOMS:' and list what symptoms might be connected to these findings.\n\n"
                                             "Guidelines for the symptoms section:\n"
                                             "- After a clear heading 'RELATED SYMPTOMS:'\n"
                                             "- List 2-3 simple symptoms using bullet points (•)\n"
                                             "- Explain each symptom in VERY simple terms\n"
-                                            "- Continue using technical terms with explanations in parentheses in the symptoms section too\n"
+                                            "- Continue using technical terms with explanations in parentheses\n"
                                             "- Connect symptoms to the findings using simple cause-effect language"
                 },
-                {"role": "user", "content": f"Explain this radiology report in simple terms, following the required template format. Start directly with the explanation: {impression}"}
+                {"role": "user", "content": f"Explain this radiology report using the required structure, adapting to the appropriate body region. Start directly with the explanation: {impression}"}
             ],
             temperature=0.3,
             max_tokens=1000
