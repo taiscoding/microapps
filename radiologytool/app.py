@@ -3,6 +3,7 @@ import json
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, Blueprint
 from dotenv import load_dotenv
+import openai
 import re
 import logging
 from logging.handlers import RotatingFileHandler
@@ -40,15 +41,13 @@ if not api_key:
     logger.error("No OpenAI API key found. Please set the OPENAI_API_KEY in key.env file or as environment variable.")
     raise ValueError("No OpenAI API key found. Please set the OPENAI_API_KEY in key.env file or as environment variable.")
 
-# Import OpenAI and configure client safely
+# Initialize OpenAI API with the older 0.28.0 style
 try:
-    from openai import OpenAI
-    
-    # Create a client without any proxies
-    client = OpenAI(api_key=api_key)
-    logger.info("OpenAI client initialized successfully")
+    # Set the API key globally for the openai module
+    openai.api_key = api_key
+    logger.info("OpenAI API key set successfully")
 except Exception as e:
-    logger.error(f"Error initializing OpenAI client: {e}")
+    logger.error(f"Error setting OpenAI API key: {e}")
     import traceback
     logger.error(f"Traceback: {traceback.format_exc()}")
     raise
@@ -57,8 +56,7 @@ except Exception as e:
 http_proxy = os.environ.get('HTTP_PROXY') or os.environ.get('http_proxy')
 https_proxy = os.environ.get('HTTPS_PROXY') or os.environ.get('https_proxy')
 if http_proxy or https_proxy:
-    logger.warning("HTTP_PROXY or HTTPS_PROXY environment variables are set, which might cause issues with OpenAI client.")
-    logger.warning("If you encounter proxy-related errors, consider unsetting these variables.")
+    logger.warning("HTTP_PROXY or HTTPS_PROXY environment variables are set.")
 
 # Store feedback data
 FEEDBACK_FILE = os.path.join(os.path.dirname(__file__), 'feedback_data.json')
@@ -115,7 +113,7 @@ def translate_radiology_impression(impression):
     and identify what symptoms typically match these findings.
     """
     try:
-        response = client.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a doctor explaining radiology results to a patient. "
@@ -141,7 +139,7 @@ def translate_radiology_impression(impression):
             max_tokens=1000
         )
         
-        # Get the raw text
+        # Get the raw text - API response structure is different in v0.28
         raw_text = response.choices[0].message.content
         
         # Format the text with HTML
@@ -149,6 +147,7 @@ def translate_radiology_impression(impression):
         
         return formatted_text
     except Exception as e:
+        logger.error(f"Error in translation: {str(e)}")
         return f"<p>Error in translation: {str(e)}</p>"
 
 @app.route('/')
