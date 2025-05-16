@@ -3,11 +3,10 @@ import json
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, Blueprint
 from dotenv import load_dotenv
-import openai
+from openai import OpenAI
 import re
 import logging
 from logging.handlers import RotatingFileHandler
-from openai import OpenAI
 
 # Set up logging with a file handler to ensure logs are written to the file
 log_file = os.path.join(os.path.dirname(__file__), 'translations_log.txt')

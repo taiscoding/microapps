@@ -23,6 +23,12 @@ if not os.path.exists(key_env_path):
     except Exception as e:
         logger.error(f"Failed to create key.env file: {e}")
 
+# Set OpenAI API key in environment before importing app
+if 'OPENAI_API_KEY' in os.environ:
+    logger.info("OpenAI API key found in environment variables")
+else:
+    logger.warning("No OpenAI API key found in environment variables")
+
 # Import and run the main app
 from app import app
 
