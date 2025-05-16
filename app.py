@@ -31,14 +31,30 @@ def radiology_redirect():
     """Redirect to the radiology tool"""
     return redirect('/radiology/')
 
+# Debug route to check if the app is running
+@app.route('/debug')
+def debug():
+    """Debug endpoint to verify the application is running"""
+    return "App is running. Registered blueprints: " + ", ".join([bp.name for bp in app.blueprints.values()])
+
 try:
     # Import the radiologytool module
-    import radiologytool.app 
+    import radiologytool.app
+    logger.info("Successfully imported radiologytool.app module")
+    
+    # Explicitly verify the blueprint exists
+    if not hasattr(radiologytool.app, 'app'):
+        logger.error("radiologytool.app module does not have an 'app' blueprint")
+        raise AttributeError("radiologytool.app module does not have an 'app' blueprint")
+        
     # Mount the radiology tool app
     app.register_blueprint(radiologytool.app.app, url_prefix='/radiology')
     logger.info("Successfully registered radiologytool blueprint")
 except Exception as e:
     logger.error(f"Error registering radiologytool blueprint: {e}")
+    # Add stack trace for better debugging
+    import traceback
+    logger.error(f"Traceback: {traceback.format_exc()}")
 
 if __name__ == '__main__':
     try:

@@ -146,6 +146,12 @@ def translate_radiology_impression(impression):
 def index():
     return render_template('radiology.html')
 
+@app.route('/health')
+def health():
+    """Health check to verify the blueprint is working"""
+    api_key_status = "Available" if os.environ.get("OPENAI_API_KEY") else "Missing"
+    return f"Radiology Tool Blueprint is healthy. OpenAI API Key: {api_key_status}"
+
 @app.route('/translate', methods=['POST'])
 def translate():
     if request.method == 'POST':
