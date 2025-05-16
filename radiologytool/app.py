@@ -79,7 +79,35 @@ def save_feedback(feedback_data):
 def format_translation(text):
     """
     Format the translation by adding proper HTML tags and styling.
+    Also removes any remaining conversational lead-ins.
     """
+    # Remove common conversational lead-ins
+    lead_ins = [
+        "sure!", "sure,", "absolutely!", "absolutely,", "here's", "i can help", "i'll explain",
+        "let me explain", "let's break this down", "to put it simply", "in simple terms",
+        "the report shows", "this means that", "this indicates that", "based on the report",
+        "the radiology report indicates", "the findings show", "the findings indicate",
+    ]
+    
+    # Clean up text by removing conversational starts
+    lower_text = text.lower()
+    first_sentence_end = lower_text.find('.')
+    if first_sentence_end > 0:
+        first_sentence = lower_text[:first_sentence_end]
+        for lead_in in lead_ins:
+            if lead_in in first_sentence:
+                # Remove the lead-in phrase and any text before it
+                start_pos = text.lower().find(lead_in)
+                end_pos = start_pos + len(lead_in)
+                # Skip to the next non-space character after the lead-in
+                while end_pos < len(text) and (text[end_pos].isspace() or text[end_pos] in ',:;'):
+                    end_pos += 1
+                text = text[end_pos:]
+                # Capitalize the first letter
+                if text:
+                    text = text[0].upper() + text[1:]
+                break
+    
     # Find the symptoms section
     pattern = r"RELATED SYMPTOMS:(.+?)$"
     match = re.search(pattern, text, re.DOTALL)
@@ -118,15 +146,17 @@ def translate_radiology_impression(impression):
             messages=[
                 {"role": "system", "content": "You are explaining radiology results to a patient who might be worried or confused. "
                                             "Your job is to make complex medical findings easy to understand.\n\n"
+                                            "IMPORTANT: Start your response directly with the explanation. DO NOT use any introductory phrases like 'Sure!', 'Here's an explanation:', 'I can help with that!', etc.\n\n"
                                             "Your response needs to be in TWO sections:\n\n"
                                             "1. First, explain what the findings mean in VERY simple, friendly language at a 6th grade reading level (ages 11-12).\n"
                                             "2. Second, add the heading 'RELATED SYMPTOMS:' and list what symptoms might be connected to these findings.\n\n"
                                             "Guidelines for explanation:\n"
+                                            "- Start directly with the explanation - NO introductory phrases\n"
                                             "- Use EXTREMELY simple words a 6th grader would understand\n"
                                             "- Keep sentences short (10-15 words maximum)\n"
                                             "- Use everyday examples when possible (e.g., 'the disc in your back is like a cushion between bones')\n"
                                             "- NEVER use medical terms without explaining them immediately (e.g., 'stenosis, which means narrowing')\n"
-                                            "- Be warm and reassuring\n"
+                                            "- Be warm and reassuring without being conversational\n"
                                             "- Use words like 'small,' 'little,' or 'mild' when appropriate to prevent unnecessary worry\n"
                                             "- Keep explanations brief, 3-4 sentences maximum\n\n"
                                             "Guidelines for symptoms:\n"
@@ -135,7 +165,7 @@ def translate_radiology_impression(impression):
                                             "- Explain each symptom in VERY simple terms\n"
                                             "- Connect symptoms to the findings using simple cause-effect language"
                 },
-                {"role": "user", "content": f"Please explain this radiology report in the simplest possible terms that anyone could understand: {impression}"}
+                {"role": "user", "content": f"Explain this radiology report in the simplest possible terms. Start your explanation directly WITHOUT any introductory phrases: {impression}"}
             ],
             temperature=0.3,
             max_tokens=1000
