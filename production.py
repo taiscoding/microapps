@@ -35,6 +35,31 @@ if 'OPENAI_API_KEY' in os.environ:
 else:
     logger.error("No OpenAI API key found in environment variables. The application will likely fail.")
 
+# Monkey patch OpenAI Client to ignore 'proxies' parameter
+try:
+    # Try to import OpenAI
+    from openai import OpenAI
+    
+    # Save the original init method
+    original_init = OpenAI.__init__
+    
+    # Define a wrapper to ignore proxies
+    def patched_init(self, *args, **kwargs):
+        # Remove proxies from kwargs if present
+        if 'proxies' in kwargs:
+            logger.info("Removing 'proxies' parameter from OpenAI client initialization")
+            del kwargs['proxies']
+        # Call original init
+        return original_init(self, *args, **kwargs)
+    
+    # Patch the init method
+    OpenAI.__init__ = patched_init
+    logger.info("Successfully monkey patched OpenAI client to ignore 'proxies' parameter")
+except Exception as e:
+    logger.error(f"Failed to monkey patch OpenAI client: {e}")
+    import traceback
+    logger.error(f"Traceback: {traceback.format_exc()}")
+
 # Add radiologytool to path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'radiologytool'))
 

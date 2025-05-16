@@ -3,7 +3,6 @@ import json
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, Blueprint
 from dotenv import load_dotenv
-from openai import OpenAI
 import re
 import logging
 from logging.handlers import RotatingFileHandler
@@ -41,8 +40,18 @@ if not api_key:
     logger.error("No OpenAI API key found. Please set the OPENAI_API_KEY in key.env file or as environment variable.")
     raise ValueError("No OpenAI API key found. Please set the OPENAI_API_KEY in key.env file or as environment variable.")
 
-# Initialize the OpenAI client properly
-client = OpenAI(api_key=api_key)
+# Import OpenAI and configure client safely
+try:
+    from openai import OpenAI
+    
+    # Create a client without any proxies
+    client = OpenAI(api_key=api_key)
+    logger.info("OpenAI client initialized successfully")
+except Exception as e:
+    logger.error(f"Error initializing OpenAI client: {e}")
+    import traceback
+    logger.error(f"Traceback: {traceback.format_exc()}")
+    raise
 
 # Check for HTTP_PROXY environment variables that might cause issues
 http_proxy = os.environ.get('HTTP_PROXY') or os.environ.get('http_proxy')
