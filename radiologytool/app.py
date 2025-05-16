@@ -109,75 +109,102 @@ def format_translation(text):
                     text = text[0].upper() + text[1:]
                 break
     
+    # First, clean up any problematic or nested explanations that might already exist
+    # This pattern looks for text like "L4 (whiL5 (which is..." and fixes it
+    nested_pattern = r'([A-Z][0-9])(\s*\(\s*whi[A-Z][0-9]\s*\()'
+    text = re.sub(nested_pattern, r'\1 (', text)
+    
+    # Add a general cleanup for any incorrectly nested parentheses
+    while re.search(r'\([^()]*\([^()]*\)[^()]*\)', text):
+        text = re.sub(r'\(([^()]*)\(([^()]*)\)([^()]*)\)', r'(\1\2\3)', text)
+    
+    # Special case for vertebral levels that appear together (like "L4-L5")
+    # Replace them with a combined explanation instead of individual ones
+    for pattern, replacement in [
+        (r'L([1-5])[- ]L([1-5])', r'L\1-L\2 (the lower part of your back)'),
+        (r'T([1-9][0-2]?)[- ]T([1-9][0-2]?)', r'T\1-T\2 (the middle part of your back)'),
+        (r'C([1-7])[- ]C([1-7])', r'C\1-C\2 (the neck area)')
+    ]:
+        # Only replace if not already followed by an explanation
+        combined_pattern = pattern + r'(?!\s*\()'
+        text = re.sub(combined_pattern, replacement, text)
+    
     # Import the medical terms dictionary from utils
     from radiologytool.utils import COMMON_MEDICAL_TERMS
     
+    # Create a helper function to check if a term already has an explanation
+    def has_explanation(term, text):
+        # This regex looks for the term followed by an opening parenthesis within a reasonable distance
+        pattern = re.escape(term) + r'\s*\([^)]*\)'
+        return bool(re.search(pattern, text, re.IGNORECASE))
+    
     # Ensure every medical term has an explanation in parentheses if not already present
-    # This is a backup in case the model doesn't follow instructions
     for term, explanation in COMMON_MEDICAL_TERMS.items():
-        # Only check for standalone terms (surrounded by spaces, punctuation, or at start/end)
+        # Check if the term is a standalone word and doesn't already have an explanation
         term_pattern = r'\b' + re.escape(term) + r'\b(?!\s*[\(\{])'
-        match = re.search(term_pattern, text, re.IGNORECASE)
-        if match:
+        if re.search(term_pattern, text, re.IGNORECASE) and not has_explanation(term, text):
             # The term exists without an explanation in parentheses
-            replacement = f"{match.group(0)} (which means {explanation})"
+            replacement = f"{term} (which means {explanation})"
             text = re.sub(term_pattern, replacement, text, flags=re.IGNORECASE)
     
     # Common anatomical locations and terms dictionary
     anatomical_terms = {
-        # Spine
-        r'\bL[1-5]-[LS][1-5]\b': 'which is in the lower back',
-        r'\bT[1-9][0-2]?-T[1-9][0-2]?\b': 'which is in the middle back',
-        r'\bC[1-7]-C[1-7]\b': 'which is in the neck',
-        r'\bL[1-5]\b': 'which is a vertebra in the lower back',
-        r'\bT[1-9][0-2]?\b': 'which is a vertebra in the middle back',
-        r'\bC[1-7]\b': 'which is a vertebra in the neck',
-        r'\bS[1-5]\b': 'which is in the sacrum (base of the spine)',
+        # Spine - these are handled separately above for the combined cases
+        r'\bL[1-5]\b': 'a vertebra in the lower back',
+        r'\bT[1-9][0-2]?\b': 'a vertebra in the middle back',
+        r'\bC[1-7]\b': 'a vertebra in the neck',
+        r'\bS[1-5]\b': 'part of the sacrum (base of the spine)',
         
         # Brain
-        r'\bfrontal lobe\b': 'which is the front part of the brain that controls thinking and movement',
-        r'\btemporal lobe\b': 'which is the side part of the brain that helps with hearing and memory',
-        r'\bparietal lobe\b': 'which is the top part of the brain that processes sensations',
-        r'\boccipital lobe\b': 'which is the back part of the brain that processes vision',
-        r'\bcerebellum\b': 'which is the lower back part of the brain that controls balance and coordination',
-        r'\bbrainstem\b': 'which connects the brain to the spinal cord and controls basic functions like breathing',
+        r'\bfrontal lobe\b': 'the front part of the brain that controls thinking and movement',
+        r'\btemporal lobe\b': 'the side part of the brain that helps with hearing and memory',
+        r'\bparietal lobe\b': 'the top part of the brain that processes sensations',
+        r'\boccipital lobe\b': 'the back part of the brain that processes vision',
+        r'\bcerebellum\b': 'the lower back part of the brain that controls balance and coordination',
+        r'\bbrainstem\b': 'the part that connects the brain to the spinal cord and controls basic functions like breathing',
         
         # Chest
-        r'\bpulmonary\b': 'which relates to the lungs',
-        r'\baorta\b': 'which is the main blood vessel carrying blood from your heart',
-        r'\bventricle\b': 'which is a chamber of the heart',
-        r'\batrium\b': 'which is an upper chamber of the heart',
-        r'\bbronch(i|us)\b': 'which are the airways in the lungs',
+        r'\bpulmonary\b': 'related to the lungs',
+        r'\baorta\b': 'the main blood vessel carrying blood from your heart',
+        r'\bventricle\b': 'a chamber of the heart',
+        r'\batrium\b': 'an upper chamber of the heart',
+        r'\bbronch(i|us)\b': 'the airways in the lungs',
         
         # Abdomen
-        r'\bhepatobiliary\b': 'which relates to the liver and bile ducts',
-        r'\bpancreas\b': 'which is an organ behind your stomach that helps with digestion',
-        r'\bspleen\b': 'which is an organ near your stomach that helps fight infection',
-        r'\bkidney\b': 'which filters waste from your blood',
-        r'\bgallbladder\b': 'which stores bile from your liver to help with digestion',
-        r'\bcolon\b': 'which is the large intestine',
+        r'\bhepatobiliary\b': 'related to the liver and bile ducts',
+        r'\bpancreas\b': 'an organ behind your stomach that helps with digestion',
+        r'\bspleen\b': 'an organ near your stomach that helps fight infection',
+        r'\bkidney\b': 'an organ that filters waste from your blood',
+        r'\bgallbladder\b': 'an organ that stores bile from your liver to help with digestion',
+        r'\bcolon\b': 'the large intestine',
         
         # Common conditions
-        r'\batrophy\b': 'which means shrinkage',
-        r'\bhypertrophy\b': 'which means enlargement',
-        r'\bstenosis\b': 'which means narrowing',
-        r'\binfarct\b': 'which is an area of damaged tissue due to lack of blood flow',
-        r'\blesion\b': 'which is an abnormal area of tissue',
-        r'\bnodule\b': 'which is a small rounded lump',
-        r'\beffusion\b': 'which is a buildup of fluid',
-        r'\bedema\b': 'which is swelling due to excess fluid',
-        r'\bhemorrhage\b': 'which is bleeding',
-        r'\bischemia\b': 'which means reduced blood flow'
+        r'\batrophy\b': 'shrinkage',
+        r'\bhypertrophy\b': 'enlargement',
+        r'\bstenosis\b': 'narrowing',
+        r'\binfarct\b': 'an area of damaged tissue due to lack of blood flow',
+        r'\blesion\b': 'an abnormal area of tissue',
+        r'\bnodule\b': 'a small rounded lump',
+        r'\beffusion\b': 'a buildup of fluid',
+        r'\bedema\b': 'swelling due to excess fluid',
+        r'\bhemorrhage\b': 'bleeding',
+        r'\bischemia\b': 'reduced blood flow'
     }
     
     # Add explanations to anatomical terms not already explained
     for term_pattern, explanation in anatomical_terms.items():
-        # Only match if not followed by parentheses
-        pattern = term_pattern + r'(?!\s*[\(\{])'
-        matches = re.finditer(pattern, text, re.IGNORECASE)
+        # Only match if not followed by parentheses and not already explained elsewhere
+        matches = re.finditer(term_pattern + r'(?!\s*[\(\{])', text, re.IGNORECASE)
         for match in matches:
-            replacement = f"{match.group(0)} ({explanation})"
-            text = text[:match.start()] + replacement + text[match.end():]
+            term = match.group(0)
+            if not has_explanation(term, text):
+                replacement = f"{term} ({explanation})"
+                # Replace only this exact instance
+                text = text[:match.start()] + replacement + text[match.end():]
+    
+    # Do a final check for any nested parentheses that might have been introduced
+    while re.search(r'\([^()]*\([^()]*\)[^()]*\)', text):
+        text = re.sub(r'\(([^()]*)\(([^()]*)\)([^()]*)\)', r'(\1\2\3)', text)
     
     # Find the symptoms section
     pattern = r"RELATED SYMPTOMS:(.+?)$"
