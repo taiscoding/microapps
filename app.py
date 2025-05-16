@@ -23,8 +23,8 @@ def index():
     """Main landing page that shows all available tools"""
     tools = [
         {
-            'name': 'Radiology Tool',
-            'description': 'Translates technical radiology impressions into patient-friendly language',
+            'name': 'Medical Report Helper',
+            'description': 'Turns medical reports into simple language anyone can understand',
             'url': '/radiology',
             'icon': 'medical.svg'
         }

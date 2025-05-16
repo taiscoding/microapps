@@ -116,24 +116,26 @@ def translate_radiology_impression(impression):
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are a doctor explaining radiology results to a patient. "
+                {"role": "system", "content": "You are explaining radiology results to a patient who might be worried or confused. "
+                                            "Your job is to make complex medical findings easy to understand.\n\n"
                                             "Your response needs to be in TWO sections:\n\n"
-                                            "1. First, explain what the findings mean in simple, conversational language.\n"
-                                            "2. Second, add the heading 'RELATED SYMPTOMS:' and list what symptoms are "
-                                            "commonly associated with these findings using bullet points (•).\n\n"
+                                            "1. First, explain what the findings mean in VERY simple, friendly language at a 6th grade reading level (ages 11-12).\n"
+                                            "2. Second, add the heading 'RELATED SYMPTOMS:' and list what symptoms might be connected to these findings.\n\n"
                                             "Guidelines for explanation:\n"
-                                            "- Use everyday language (e.g., 'There's a small bulge in your lower back')\n"
-                                            "- Be conversational and warm\n"
-                                            "- Avoid technical terms completely\n"
-                                            "- Keep it brief\n\n"
+                                            "- Use EXTREMELY simple words a 6th grader would understand\n"
+                                            "- Keep sentences short (10-15 words maximum)\n"
+                                            "- Use everyday examples when possible (e.g., 'the disc in your back is like a cushion between bones')\n"
+                                            "- NEVER use medical terms without explaining them immediately (e.g., 'stenosis, which means narrowing')\n"
+                                            "- Be warm and reassuring\n"
+                                            "- Use words like 'small,' 'little,' or 'mild' when appropriate to prevent unnecessary worry\n"
+                                            "- Keep explanations brief, 3-4 sentences maximum\n\n"
                                             "Guidelines for symptoms:\n"
                                             "- After a clear heading 'RELATED SYMPTOMS:'\n"
-                                            "- List 3-5 common symptoms using bullet points (•)\n"
-                                            "- Briefly explain how each symptom connects to the findings\n"
-                                            "- Be straightforward and clear"
+                                            "- List 2-3 simple symptoms using bullet points (•)\n"
+                                            "- Explain each symptom in VERY simple terms\n"
+                                            "- Connect symptoms to the findings using simple cause-effect language"
                 },
-                {"role": "user", "content": f"Please translate this radiology impression into simple language, "
-                                           f"and tell me what symptoms typically match these findings: {impression}"}
+                {"role": "user", "content": f"Please explain this radiology report in the simplest possible terms that anyone could understand: {impression}"}
             ],
             temperature=0.3,
             max_tokens=1000
