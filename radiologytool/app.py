@@ -380,37 +380,47 @@ def format_single_paragraph(text):
                     text = text[0].upper() + text[1:]
                 break
     
-    # First, clean up any problematic or nested explanations that might already exist
-    # This pattern looks for text like "L4 (whiL5 (which is..." and fixes it
-    nested_pattern = r'([A-Z][0-9])(\s*\(\s*whi[A-Z][0-9]\s*\()'
-    text = re.sub(nested_pattern, r'\1 (', text)
+    # Keep track of vertebrae we've already processed - to avoid double-explanation
+    processed_vertebrae = set()
     
-    # Add a general cleanup for any incorrectly nested parentheses
-    while re.search(r'\([^()]*\([^()]*\)[^()]*\)', text):
-        text = re.sub(r'\(([^()]*)\(([^()]*)\)([^()]*)\)', r'(\1\2\3)', text)
+    # First pass - mark all vertebrae ranges for protection
+    # This pattern will mark things like "L4-L5" to protect them
+    vertebrae_range_pattern = r'(L[1-5])\s*[-–—]\s*(L[1-5])'
+    vertebrae_ranges = re.findall(vertebrae_range_pattern, text)
+    
+    for v_range in vertebrae_ranges:
+        # Add each vertebra in the range to our processed set
+        processed_vertebrae.add(v_range[0])  # First vertebra (e.g., L4)
+        processed_vertebrae.add(v_range[1])  # Second vertebra (e.g., L5)
+    
+    # Handle any vertebrae patterns that already have parentheses
+    for match in re.finditer(r'([TLC][1-9][0-2]?)\s*\(', text):
+        processed_vertebrae.add(match.group(1))
     
     # Special case for vertebral levels that appear together (like "L4-L5")
     # Replace them with a combined explanation instead of individual ones
     for pattern, replacement in [
-        (r'L([1-5])[- ]L([1-5])', r'L\1-L\2 (the area in your lower back)'),
-        (r'T([1-9][0-2]?)[- ]T([1-9][0-2]?)', r'T\1-T\2 (the area in your middle back)'),
-        (r'C([1-7])[- ]C([1-7])', r'C\1-C\2 (the area in your neck)')
+        (r'(L[1-5])\s*[-–—]\s*(L[1-5])', r'\1-\2 (the area in your lower back)'),
+        (r'(T[1-9][0-2]?)\s*[-–—]\s*(T[1-9][0-2]?)', r'\1-\2 (the area in your middle back)'),
+        (r'(C[1-7])\s*[-–—]\s*(C[1-7])', r'\1-\2 (the area in your neck)')
     ]:
-        # Only replace if not already followed by an explanation
-        combined_pattern = pattern + r'(?!\s*\()'
-        text = re.sub(combined_pattern, replacement, text)
+        text = re.sub(pattern, replacement, text)
     
-    # Fix standalone vertebrae before applying the general rules
-    # This addresses the issue with patterns like L4 (part of your lower back)
+    # Fix standalone vertebrae that are not part of a range and don't already have explanations
     vertebrae_patterns = {
-        r'\bL([1-5])\b(?!\s*[-–—]\s*L[1-5])(?!\s*\()': r'L\1 (a vertebra in your lower back)',
-        r'\bT([1-9][0-2]?)\b(?!\s*[-–—]\s*T[1-9])(?!\s*\()': r'T\1 (a vertebra in your middle back)',
-        r'\bC([1-7])\b(?!\s*[-–—]\s*C[1-7])(?!\s*\()': r'C\1 (a vertebra in your neck)',
-        r'\bS([1-5])\b(?!\s*[-–—]\s*S[1-5])(?!\s*\()': r'S\1 (a vertebra at the base of your spine)'
+        r'\b(L[1-5])\b(?!\s*[-–—]\s*[TLC][0-9])(?!\s*\()': r'\1 (a vertebra in your lower back)',
+        r'\b(T[1-9][0-2]?)\b(?!\s*[-–—]\s*[TLC][0-9])(?!\s*\()': r'\1 (a vertebra in your middle back)',
+        r'\b(C[1-7])\b(?!\s*[-–—]\s*[TLC][0-9])(?!\s*\()': r'\1 (a vertebra in your neck)',
+        r'\b(S[1-5])\b(?!\s*[-–—]\s*[TLC][0-9])(?!\s*\()': r'\1 (a vertebra at the base of your spine)'
     }
     
     for pattern, replacement in vertebrae_patterns.items():
-        text = re.sub(pattern, replacement, text)
+        for match in re.finditer(pattern, text):
+            vertebra = match.group(1)
+            # Only replace if not already processed
+            if vertebra not in processed_vertebrae:
+                processed_vertebrae.add(vertebra)
+                text = text[:match.start()] + vertebra + " (a vertebra in your lower back)" + text[match.end():]
     
     # Import the medical terms dictionary from utils
     from radiologytool.utils import COMMON_MEDICAL_TERMS
@@ -430,98 +440,14 @@ def format_single_paragraph(text):
             replacement = f"{term} ({explanation})"
             text = re.sub(term_pattern, replacement, text, flags=re.IGNORECASE)
     
-    # Common anatomical locations and terms dictionary
-    anatomical_terms = {
-        # Spine - treat individual vertebrae consistently
-        r'\bL[1-5]\b': 'part of your lower back',
-        r'\bT[1-9][0-2]?\b': 'part of your middle back',
-        r'\bC[1-7]\b': 'part of your neck',
-        r'\bS[1-5]\b': 'part of the base of your spine',
-        
-        # Brain
-        r'\bfrontal lobe\b': 'the front part of the brain that controls thinking and movement',
-        r'\btemporal lobe\b': 'the side part of the brain that helps with hearing and memory',
-        r'\bparietal lobe\b': 'the top part of the brain that processes sensations',
-        r'\boccipital lobe\b': 'the back part of the brain that processes vision',
-        r'\bcerebellum\b': 'the lower back part of the brain that controls balance and coordination',
-        r'\bbrainstem\b': 'the part that connects the brain to the spinal cord and controls basic functions like breathing',
-        
-        # Chest
-        r'\bpulmonary\b': 'related to the lungs',
-        r'\baorta\b': 'the main blood vessel carrying blood from your heart',
-        r'\bventricle\b': 'a chamber of the heart',
-        r'\batrium\b': 'an upper chamber of the heart',
-        r'\bbronch(i|us)\b': 'the airways in the lungs',
-        
-        # Abdomen
-        r'\bhepatobiliary\b': 'related to the liver and bile ducts',
-        r'\bpancreas\b': 'an organ behind your stomach that helps with digestion',
-        r'\bspleen\b': 'an organ near your stomach that helps fight infection',
-        r'\bkidney\b': 'an organ that filters waste from your blood',
-        r'\bgallbladder\b': 'an organ that stores bile from your liver to help with digestion',
-        r'\bcolon\b': 'the large intestine',
-        
-        # Common conditions
-        r'\batrophy\b': 'shrinkage',
-        r'\bhypertrophy\b': 'enlargement',
-        r'\bstenosis\b': 'narrowing',
-        r'\binfarct\b': 'an area of damaged tissue due to lack of blood flow',
-        r'\blesion\b': 'an abnormal area of tissue',
-        r'\bnodule\b': 'a small rounded lump',
-        r'\beffusion\b': 'a buildup of fluid',
-        r'\bedema\b': 'swelling due to excess fluid',
-        r'\bhemorrhage\b': 'bleeding',
-        r'\bischemia\b': 'reduced blood flow'
-    }
-    
-    # Add explanations to anatomical terms not already explained
-    for term_pattern, explanation in anatomical_terms.items():
-        # Only match if not followed by parentheses and not already explained elsewhere
-        matches = re.finditer(term_pattern + r'(?!\s*[\(\{])', text, re.IGNORECASE)
-        for match in matches:
-            term = match.group(0)
-            if not has_explanation(term, text):
-                replacement = f"{term} ({explanation})"
-                # Replace only this exact instance
-                text = text[:match.start()] + replacement + text[match.end():]
-    
-    # Special handling for example: "L4-L5 resulting in" pattern
-    # Make sure the vertebrae with ranges are properly explained
-    disc_level_pattern = r'\b(L[1-5]\s*-\s*L[1-5]|T[1-9][0-2]?\s*-\s*T[1-9][0-2]?|C[1-7]\s*-\s*C[1-7])\b(?!\s*\()'
-    if re.search(disc_level_pattern, text):
-        for match in re.finditer(disc_level_pattern, text):
-            level = match.group(1)
-            if 'L' in level:
-                replacement = f"{level} (the area between these two bones in your lower back)"
-            elif 'T' in level:
-                replacement = f"{level} (the area between these two bones in your middle back)"
-            elif 'C' in level:
-                replacement = f"{level} (the area between these two bones in your neck)"
-            else:
-                continue
-                
-            # Replace only this instance
-            text = text[:match.start()] + replacement + text[match.end():]
-    
-    # Do multiple passes to fix any nested parentheses
-    for _ in range(3):  # Try up to 3 times to fix nested parentheses
-        if re.search(r'\([^()]*\([^()]*\)[^()]*\)', text):
-            text = re.sub(r'\(([^()]*)\(([^()]*)\)([^()]*)\)', r'(\1\2\3)', text)
-        else:
-            break
-    
-    # Handle any unclosed parentheses
+    # Check for unbalanced parentheses at this point
     open_count = text.count('(')
     close_count = text.count(')')
-    if open_count > close_count:
-        text += ')' * (open_count - close_count)
-    elif close_count > open_count:
-        text = text.replace(')', '', close_count - open_count)
     
-    # Clean up any asterisks, stars, or bullet points
-    text = re.sub(r'\*+', '', text)       # Remove asterisks
-    text = re.sub(r'•', '', text)         # Remove bullet points
-    text = re.sub(r'^\s*-\s*', '', text)  # Remove hyphens used as bullets
+    # If there are unbalanced parentheses, let's remove all explanations and simplify
+    if open_count != close_count:
+        # Instead of complex fixes, just pass through the original text with basic cleanup
+        return f"<p>{text}</p>"
     
     # Remove any mention of symptoms, causes, treatments, or risk factors
     symptom_patterns = [
@@ -543,17 +469,6 @@ def format_single_paragraph(text):
     
     for pattern in symptom_patterns:
         text = re.sub(pattern, '', text)
-    
-    # Remove any bullet list sections that might appear in the text
-    bullet_list_pattern = r'(?:\s*[•\*-]\s*[^\n]+\n?)+'
-    text = re.sub(bullet_list_pattern, ' ', text)
-    
-    # Clean up multiple spaces and ensure proper sentence spacing
-    text = re.sub(r' +', ' ', text)
-    text = re.sub(r'\.\s+', '. ', text)
-    
-    # Final check for any trailing symbols
-    text = text.rstrip('*• \t\n-')
     
     # Wrap in paragraph tags
     return f"<p>{text}</p>"
