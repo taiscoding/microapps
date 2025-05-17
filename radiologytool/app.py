@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import openai
 import re
 import logging
+import traceback
 from logging.handlers import RotatingFileHandler
 
 # Set up logging with a file handler to ensure logs are written to the file
@@ -48,7 +49,6 @@ try:
     logger.info("OpenAI API key set successfully")
 except Exception as e:
     logger.error(f"Error setting OpenAI API key: {e}")
-    import traceback
     logger.error(f"Traceback: {traceback.format_exc()}")
     raise
 
@@ -320,18 +320,31 @@ def translate_radiology_impression(impression):
                 {"role": "user", "content": f"Explain this radiology report impression in simple terms, focusing ONLY on what the findings mean (not symptoms, causes, risk factors, or treatments): {impression}"}
             ],
             temperature=0.3,
-            max_tokens=1000
+            max_tokens=2000
         )
+        
+        # Log the full response to help with debugging
+        try:
+            logger.info(f"OpenAI API raw response: {response}")
+        except:
+            logger.info("Could not log the full OpenAI API response")
         
         # Get the response text from the new API structure
         raw_text = response.choices[0].message.content
         
+        # Log the raw text to debug any issues
+        logger.info(f"Raw translation text: {raw_text}")
+        
         # Always use format_single_paragraph rather than format_translation
         formatted_text = format_single_paragraph(raw_text)
+        
+        # Log the formatted text
+        logger.info(f"Formatted translation text: {formatted_text}")
         
         return formatted_text
     except Exception as e:
         logger.error(f"Error in translation: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return f"<p>Error in translation: {str(e)}</p>"
 
 def format_single_paragraph(text):
