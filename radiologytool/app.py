@@ -121,13 +121,25 @@ def format_translation(text):
     # Special case for vertebral levels that appear together (like "L4-L5")
     # Replace them with a combined explanation instead of individual ones
     for pattern, replacement in [
-        (r'L([1-5])[- ]L([1-5])', r'L\1-L\2 (the lower part of your back)'),
-        (r'T([1-9][0-2]?)[- ]T([1-9][0-2]?)', r'T\1-T\2 (the middle part of your back)'),
-        (r'C([1-7])[- ]C([1-7])', r'C\1-C\2 (the neck area)')
+        (r'L([1-5])[- ]L([1-5])', r'L\1-L\2 (the area in your lower back)'),
+        (r'T([1-9][0-2]?)[- ]T([1-9][0-2]?)', r'T\1-T\2 (the area in your middle back)'),
+        (r'C([1-7])[- ]C([1-7])', r'C\1-C\2 (the area in your neck)')
     ]:
         # Only replace if not already followed by an explanation
         combined_pattern = pattern + r'(?!\s*\()'
         text = re.sub(combined_pattern, replacement, text)
+    
+    # Fix standalone vertebrae before applying the general rules
+    # This addresses the issue with patterns like L4 (part of your lower back)
+    vertebrae_patterns = {
+        r'\bL([1-5])\b(?!\s*[-–—]\s*L[1-5])(?!\s*\()': r'L\1 (a vertebra in your lower back)',
+        r'\bT([1-9][0-2]?)\b(?!\s*[-–—]\s*T[1-9])(?!\s*\()': r'T\1 (a vertebra in your middle back)',
+        r'\bC([1-7])\b(?!\s*[-–—]\s*C[1-7])(?!\s*\()': r'C\1 (a vertebra in your neck)',
+        r'\bS([1-5])\b(?!\s*[-–—]\s*S[1-5])(?!\s*\()': r'S\1 (a vertebra at the base of your spine)'
+    }
+    
+    for pattern, replacement in vertebrae_patterns.items():
+        text = re.sub(pattern, replacement, text)
     
     # Import the medical terms dictionary from utils
     from radiologytool.utils import COMMON_MEDICAL_TERMS
@@ -144,7 +156,7 @@ def format_translation(text):
         term_pattern = r'\b' + re.escape(term) + r'\b(?!\s*[\(\{])'
         if re.search(term_pattern, text, re.IGNORECASE) and not has_explanation(term, text):
             # The term exists without an explanation in parentheses
-            replacement = f"{term} (which means {explanation})"
+            replacement = f"{term} ({explanation})"
             text = re.sub(term_pattern, replacement, text, flags=re.IGNORECASE)
     
     # Common anatomical locations and terms dictionary
@@ -202,36 +214,78 @@ def format_translation(text):
                 # Replace only this exact instance
                 text = text[:match.start()] + replacement + text[match.end():]
     
-    # Do a final check for any nested parentheses that might have been introduced
-    while re.search(r'\([^()]*\([^()]*\)[^()]*\)', text):
-        text = re.sub(r'\(([^()]*)\(([^()]*)\)([^()]*)\)', r'(\1\2\3)', text)
+    # Special handling for example: "L4-L5 resulting in" pattern
+    # Make sure the vertebrae with ranges are properly explained
+    disc_level_pattern = r'\b(L[1-5]\s*-\s*L[1-5]|T[1-9][0-2]?\s*-\s*T[1-9][0-2]?|C[1-7]\s*-\s*C[1-7])\b(?!\s*\()'
+    if re.search(disc_level_pattern, text):
+        for match in re.finditer(disc_level_pattern, text):
+            level = match.group(1)
+            if 'L' in level:
+                replacement = f"{level} (the area between these two bones in your lower back)"
+            elif 'T' in level:
+                replacement = f"{level} (the area between these two bones in your middle back)"
+            elif 'C' in level:
+                replacement = f"{level} (the area between these two bones in your neck)"
+            else:
+                continue
+                
+            # Replace only this instance
+            text = text[:match.start()] + replacement + text[match.end():]
     
-    # Find the symptoms section
-    pattern = r"RELATED SYMPTOMS:(.+?)$"
-    match = re.search(pattern, text, re.DOTALL)
+    # Do multiple passes to fix any nested parentheses
+    for _ in range(3):  # Try up to 3 times to fix nested parentheses
+        if re.search(r'\([^()]*\([^()]*\)[^()]*\)', text):
+            text = re.sub(r'\(([^()]*)\(([^()]*)\)([^()]*)\)', r'(\1\2\3)', text)
+        else:
+            break
     
-    if match:
-        # Split the text into explanation and symptoms
-        split_index = text.find("RELATED SYMPTOMS:")
-        explanation = text[:split_index].strip()
-        symptoms_section = "RELATED SYMPTOMS:" + match.group(1)
-        
-        # Format bullet points in symptoms section
-        symptoms_section = re.sub(r"•\s*([^\n]+)", r"<li>\1</li>", symptoms_section)
-        symptoms_section = re.sub(r"\*\s*([^\n]+)", r"<li>\1</li>", symptoms_section)
-        symptoms_section = re.sub(r"-\s*([^\n]+)", r"<li>\1</li>", symptoms_section)
-        
-        # Replace "RELATED SYMPTOMS:" with HTML header
-        symptoms_section = symptoms_section.replace("RELATED SYMPTOMS:", 
-                                                   "<h5 class='symptoms-header mt-4'>Related Symptoms</h5><ul>")
-        symptoms_section += "</ul>"
-        
-        # Combine formatted parts
-        formatted_text = f"<p>{explanation}</p>{symptoms_section}"
-        return formatted_text
-    else:
-        # No symptoms section found, just wrap in paragraph
-        return f"<p>{text}</p>"
+    # Handle any unclosed parentheses
+    open_count = text.count('(')
+    close_count = text.count(')')
+    if open_count > close_count:
+        text += ')' * (open_count - close_count)
+    elif close_count > open_count:
+        text = text.replace(')', '', close_count - open_count)
+    
+    # Clean up any asterisks, stars, or bullet points
+    text = re.sub(r'\*+', '', text)       # Remove asterisks
+    text = re.sub(r'•', '', text)         # Remove bullet points
+    text = re.sub(r'^\s*-\s*', '', text)  # Remove hyphens used as bullets
+    
+    # Remove any mention of symptoms, causes, treatments, or risk factors
+    symptom_patterns = [
+        r'(?i)related symptoms[:\s]*.*$',
+        r'(?i)this can cause[^\.]*\.',
+        r'(?i)symptoms may include[^\.]*\.',
+        r'(?i)you might (feel|experience)[^\.]*\.',
+        r'(?i)this (may|might|can) lead to[^\.]*\.',
+        r'(?i)common symptoms[^\.]*\.',
+        r'(?i)you (may|might|can) feel[^\.]*\.',
+        r'(?i)you (may|might|can) notice[^\.]*\.',
+        r'(?i)this could result in[^\.]*\.',
+        r'(?i)this is (often|sometimes|usually) associated with[^\.]*\.',
+        r'(?i)patients (often|sometimes|usually) experience[^\.]*\.',
+        r'(?i)treatment (options|may|might|includes|involves)[^\.]*\.',
+        r'(?i)risk factors[^\.]*\.',
+        r'(?i)causes (of|for|include)[^\.]*\.'
+    ]
+    
+    for pattern in symptom_patterns:
+        text = re.sub(pattern, '', text)
+    
+    # Remove any bullet list sections that might appear in the text
+    bullet_list_pattern = r'(?:\s*[•\*-]\s*[^\n]+\n?)+'
+    text = re.sub(bullet_list_pattern, ' ', text)
+    
+    # Clean up multiple spaces and ensure proper sentence spacing
+    text = re.sub(r' +', ' ', text)
+    text = re.sub(r'\.\s+', '. ', text)
+    
+    # Final check for any trailing symbols
+    text = text.rstrip('*• \t\n-')
+    
+    # Wrap in paragraph tags
+    return f"<p>{text}</p>"
 
 def translate_radiology_impression(impression):
     """
@@ -333,6 +387,18 @@ def format_single_paragraph(text):
         combined_pattern = pattern + r'(?!\s*\()'
         text = re.sub(combined_pattern, replacement, text)
     
+    # Fix standalone vertebrae before applying the general rules
+    # This addresses the issue with patterns like L4 (part of your lower back)
+    vertebrae_patterns = {
+        r'\bL([1-5])\b(?!\s*[-–—]\s*L[1-5])(?!\s*\()': r'L\1 (a vertebra in your lower back)',
+        r'\bT([1-9][0-2]?)\b(?!\s*[-–—]\s*T[1-9])(?!\s*\()': r'T\1 (a vertebra in your middle back)',
+        r'\bC([1-7])\b(?!\s*[-–—]\s*C[1-7])(?!\s*\()': r'C\1 (a vertebra in your neck)',
+        r'\bS([1-5])\b(?!\s*[-–—]\s*S[1-5])(?!\s*\()': r'S\1 (a vertebra at the base of your spine)'
+    }
+    
+    for pattern, replacement in vertebrae_patterns.items():
+        text = re.sub(pattern, replacement, text)
+    
     # Import the medical terms dictionary from utils
     from radiologytool.utils import COMMON_MEDICAL_TERMS
     
@@ -406,9 +472,38 @@ def format_single_paragraph(text):
                 # Replace only this exact instance
                 text = text[:match.start()] + replacement + text[match.end():]
     
-    # Do a final check for any nested parentheses that might have been introduced
-    while re.search(r'\([^()]*\([^()]*\)[^()]*\)', text):
-        text = re.sub(r'\(([^()]*)\(([^()]*)\)([^()]*)\)', r'(\1\2\3)', text)
+    # Special handling for example: "L4-L5 resulting in" pattern
+    # Make sure the vertebrae with ranges are properly explained
+    disc_level_pattern = r'\b(L[1-5]\s*-\s*L[1-5]|T[1-9][0-2]?\s*-\s*T[1-9][0-2]?|C[1-7]\s*-\s*C[1-7])\b(?!\s*\()'
+    if re.search(disc_level_pattern, text):
+        for match in re.finditer(disc_level_pattern, text):
+            level = match.group(1)
+            if 'L' in level:
+                replacement = f"{level} (the area between these two bones in your lower back)"
+            elif 'T' in level:
+                replacement = f"{level} (the area between these two bones in your middle back)"
+            elif 'C' in level:
+                replacement = f"{level} (the area between these two bones in your neck)"
+            else:
+                continue
+                
+            # Replace only this instance
+            text = text[:match.start()] + replacement + text[match.end():]
+    
+    # Do multiple passes to fix any nested parentheses
+    for _ in range(3):  # Try up to 3 times to fix nested parentheses
+        if re.search(r'\([^()]*\([^()]*\)[^()]*\)', text):
+            text = re.sub(r'\(([^()]*)\(([^()]*)\)([^()]*)\)', r'(\1\2\3)', text)
+        else:
+            break
+    
+    # Handle any unclosed parentheses
+    open_count = text.count('(')
+    close_count = text.count(')')
+    if open_count > close_count:
+        text += ')' * (open_count - close_count)
+    elif close_count > open_count:
+        text = text.replace(')', '', close_count - open_count)
     
     # Clean up any asterisks, stars, or bullet points
     text = re.sub(r'\*+', '', text)       # Remove asterisks
