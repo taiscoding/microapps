@@ -236,35 +236,31 @@ def format_translation(text):
 def translate_radiology_impression(impression):
     """
     Translate technical radiology impression into patient-friendly language
-    and identify what symptoms typically match these findings.
+    at a 6th grade reading level, without mentioning symptoms.
     """
     try:
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You explain radiology results in simple, clear language for patients with no medical background. "
-                                            "Your goal is to translate complex findings into easily understandable explanations.\n\n"
-                                            "IMPORTANT: Start your response directly with the explanation - no introductory phrases.\n\n"
-                                            "REQUIRED STRUCTURE FOR ALL EXPLANATIONS:\n"
-                                            "1. Start with a plain-language summary of the finding, using short, clear sentences.\n"
-                                            "2. Include technical terms or locations in parentheses immediately after, with a simple explanation (e.g., \"L4–L5 (the lower part of your back)\").\n"
-                                            "3. Describe the effect or consequence in simple terms, focusing on what it means for the patient.\n"
-                                            "4. Do not use unnecessary detail, measurements, or jargon unless essential—and always explain them if included.\n"
-                                            "5. Apply this structure for all body areas (spine, brain, chest, etc.).\n"
-                                            "6. Avoid redundancy—explain each symptom or effect only once, in the clearest way possible.\n\n"
-                                            "EXAMPLE TEMPLATE:\n\n"
+                                            "Your job is to translate complex medical impressions into one cohesive, easily understandable explanation.\n\n"
+                                            "CRITICAL REQUIREMENTS:\n"
+                                            "1. Create ONE SINGLE PARAGRAPH that explains ONLY the medical impression.\n"
+                                            "2. DO NOT mention symptoms, causes, risk factors, or treatments - focus ONLY on what the impression means.\n"
+                                            "3. DO NOT use bullet points, asterisks, or any special formatting.\n"
+                                            "4. Start directly with the explanation - no introductory phrases.\n\n"
+                                            "EXAMPLE FORMAT:\n"
                                             "\"There is some mild wear and tear in the disc between two bones in the lower part of your back (called L4–L5). The disc is bulging a little and making the space where your nerves pass through a bit tighter, especially on the left side.\"\n\n"
-                                            "Your response must have TWO sections:\n\n"
-                                            "1. First, explain the findings following the structure above.\n"
-                                            "2. Second, after a heading 'RELATED SYMPTOMS:', list 2-3 common symptoms using bullet points (•).\n\n"
-                                            "For symptoms, use short phrases such as:\n"
-                                            "• Lower back pain\n"
-                                            "• Leg pain\n"
-                                            "• Numbness or tingling in the leg\n"
-                                            "• Weakness in the leg\n\n"
-                                            "Always prioritize simple, direct language and clarity for a patient with no medical background."
+                                            "GUIDELINES:\n"
+                                            "- Use short, clear sentences at a 6th grade reading level.\n"
+                                            "- DO NOT include any information about symptoms or possible symptoms.\n"
+                                            "- DO NOT include any information about causes, risk factors, or treatments.\n"
+                                            "- When mentioning technical terms, always include simple explanations in parentheses.\n"
+                                            "- For vertebral levels (like L4-L5), use a consistent description: \"L4-L5 (the area in your lower back)\"\n"
+                                            "- Keep your response concise, clear, and reassuring.\n"
+                                            "- Always prioritize simple, direct language for a patient with no medical background."
                 },
-                {"role": "user", "content": f"Explain this radiology report in simple terms. Start directly with the explanation: {impression}"}
+                {"role": "user", "content": f"Explain this radiology report impression in simple terms, focusing ONLY on what the findings mean (not symptoms, causes, risk factors, or treatments): {impression}"}
             ],
             temperature=0.3,
             max_tokens=1000
@@ -273,13 +269,183 @@ def translate_radiology_impression(impression):
         # Get the raw text - API response structure is different in v0.28
         raw_text = response.choices[0].message.content
         
-        # Format the text with HTML
-        formatted_text = format_translation(raw_text)
+        # Always use format_single_paragraph rather than format_translation
+        formatted_text = format_single_paragraph(raw_text)
         
         return formatted_text
     except Exception as e:
         logger.error(f"Error in translation: {str(e)}")
         return f"<p>Error in translation: {str(e)}</p>"
+
+def format_single_paragraph(text):
+    """
+    Format the translation as a single paragraph with HTML tags.
+    Also removes any remaining conversational lead-ins and ensures
+    technical terms have explanations in parentheses.
+    """
+    # Remove common conversational lead-ins
+    lead_ins = [
+        "sure!", "sure,", "absolutely!", "absolutely,", "here's", "i can help", "i'll explain",
+        "let me explain", "let's break this down", "to put it simply", "in simple terms",
+        "the report shows", "this means that", "this indicates that", "based on the report",
+        "the radiology report indicates", "the findings show", "the findings indicate",
+    ]
+    
+    # Clean up text by removing conversational starts
+    lower_text = text.lower()
+    first_sentence_end = lower_text.find('.')
+    if first_sentence_end > 0:
+        first_sentence = lower_text[:first_sentence_end]
+        for lead_in in lead_ins:
+            if lead_in in first_sentence:
+                # Remove the lead-in phrase and any text before it
+                start_pos = text.lower().find(lead_in)
+                end_pos = start_pos + len(lead_in)
+                # Skip to the next non-space character after the lead-in
+                while end_pos < len(text) and (text[end_pos].isspace() or text[end_pos] in ',:;'):
+                    end_pos += 1
+                text = text[end_pos:]
+                # Capitalize the first letter
+                if text:
+                    text = text[0].upper() + text[1:]
+                break
+    
+    # First, clean up any problematic or nested explanations that might already exist
+    # This pattern looks for text like "L4 (whiL5 (which is..." and fixes it
+    nested_pattern = r'([A-Z][0-9])(\s*\(\s*whi[A-Z][0-9]\s*\()'
+    text = re.sub(nested_pattern, r'\1 (', text)
+    
+    # Add a general cleanup for any incorrectly nested parentheses
+    while re.search(r'\([^()]*\([^()]*\)[^()]*\)', text):
+        text = re.sub(r'\(([^()]*)\(([^()]*)\)([^()]*)\)', r'(\1\2\3)', text)
+    
+    # Special case for vertebral levels that appear together (like "L4-L5")
+    # Replace them with a combined explanation instead of individual ones
+    for pattern, replacement in [
+        (r'L([1-5])[- ]L([1-5])', r'L\1-L\2 (the area in your lower back)'),
+        (r'T([1-9][0-2]?)[- ]T([1-9][0-2]?)', r'T\1-T\2 (the area in your middle back)'),
+        (r'C([1-7])[- ]C([1-7])', r'C\1-C\2 (the area in your neck)')
+    ]:
+        # Only replace if not already followed by an explanation
+        combined_pattern = pattern + r'(?!\s*\()'
+        text = re.sub(combined_pattern, replacement, text)
+    
+    # Import the medical terms dictionary from utils
+    from radiologytool.utils import COMMON_MEDICAL_TERMS
+    
+    # Create a helper function to check if a term already has an explanation
+    def has_explanation(term, text):
+        # This regex looks for the term followed by an opening parenthesis within a reasonable distance
+        pattern = re.escape(term) + r'\s*\([^)]*\)'
+        return bool(re.search(pattern, text, re.IGNORECASE))
+    
+    # Ensure every medical term has an explanation in parentheses if not already present
+    for term, explanation in COMMON_MEDICAL_TERMS.items():
+        # Check if the term is a standalone word and doesn't already have an explanation
+        term_pattern = r'\b' + re.escape(term) + r'\b(?!\s*[\(\{])'
+        if re.search(term_pattern, text, re.IGNORECASE) and not has_explanation(term, text):
+            # The term exists without an explanation in parentheses
+            replacement = f"{term} ({explanation})"
+            text = re.sub(term_pattern, replacement, text, flags=re.IGNORECASE)
+    
+    # Common anatomical locations and terms dictionary
+    anatomical_terms = {
+        # Spine - treat individual vertebrae consistently
+        r'\bL[1-5]\b': 'part of your lower back',
+        r'\bT[1-9][0-2]?\b': 'part of your middle back',
+        r'\bC[1-7]\b': 'part of your neck',
+        r'\bS[1-5]\b': 'part of the base of your spine',
+        
+        # Brain
+        r'\bfrontal lobe\b': 'the front part of the brain that controls thinking and movement',
+        r'\btemporal lobe\b': 'the side part of the brain that helps with hearing and memory',
+        r'\bparietal lobe\b': 'the top part of the brain that processes sensations',
+        r'\boccipital lobe\b': 'the back part of the brain that processes vision',
+        r'\bcerebellum\b': 'the lower back part of the brain that controls balance and coordination',
+        r'\bbrainstem\b': 'the part that connects the brain to the spinal cord and controls basic functions like breathing',
+        
+        # Chest
+        r'\bpulmonary\b': 'related to the lungs',
+        r'\baorta\b': 'the main blood vessel carrying blood from your heart',
+        r'\bventricle\b': 'a chamber of the heart',
+        r'\batrium\b': 'an upper chamber of the heart',
+        r'\bbronch(i|us)\b': 'the airways in the lungs',
+        
+        # Abdomen
+        r'\bhepatobiliary\b': 'related to the liver and bile ducts',
+        r'\bpancreas\b': 'an organ behind your stomach that helps with digestion',
+        r'\bspleen\b': 'an organ near your stomach that helps fight infection',
+        r'\bkidney\b': 'an organ that filters waste from your blood',
+        r'\bgallbladder\b': 'an organ that stores bile from your liver to help with digestion',
+        r'\bcolon\b': 'the large intestine',
+        
+        # Common conditions
+        r'\batrophy\b': 'shrinkage',
+        r'\bhypertrophy\b': 'enlargement',
+        r'\bstenosis\b': 'narrowing',
+        r'\binfarct\b': 'an area of damaged tissue due to lack of blood flow',
+        r'\blesion\b': 'an abnormal area of tissue',
+        r'\bnodule\b': 'a small rounded lump',
+        r'\beffusion\b': 'a buildup of fluid',
+        r'\bedema\b': 'swelling due to excess fluid',
+        r'\bhemorrhage\b': 'bleeding',
+        r'\bischemia\b': 'reduced blood flow'
+    }
+    
+    # Add explanations to anatomical terms not already explained
+    for term_pattern, explanation in anatomical_terms.items():
+        # Only match if not followed by parentheses and not already explained elsewhere
+        matches = re.finditer(term_pattern + r'(?!\s*[\(\{])', text, re.IGNORECASE)
+        for match in matches:
+            term = match.group(0)
+            if not has_explanation(term, text):
+                replacement = f"{term} ({explanation})"
+                # Replace only this exact instance
+                text = text[:match.start()] + replacement + text[match.end():]
+    
+    # Do a final check for any nested parentheses that might have been introduced
+    while re.search(r'\([^()]*\([^()]*\)[^()]*\)', text):
+        text = re.sub(r'\(([^()]*)\(([^()]*)\)([^()]*)\)', r'(\1\2\3)', text)
+    
+    # Clean up any asterisks, stars, or bullet points
+    text = re.sub(r'\*+', '', text)       # Remove asterisks
+    text = re.sub(r'•', '', text)         # Remove bullet points
+    text = re.sub(r'^\s*-\s*', '', text)  # Remove hyphens used as bullets
+    
+    # Remove any mention of symptoms, causes, treatments, or risk factors
+    symptom_patterns = [
+        r'(?i)related symptoms[:\s]*.*$',
+        r'(?i)this can cause[^\.]*\.',
+        r'(?i)symptoms may include[^\.]*\.',
+        r'(?i)you might (feel|experience)[^\.]*\.',
+        r'(?i)this (may|might|can) lead to[^\.]*\.',
+        r'(?i)common symptoms[^\.]*\.',
+        r'(?i)you (may|might|can) feel[^\.]*\.',
+        r'(?i)you (may|might|can) notice[^\.]*\.',
+        r'(?i)this could result in[^\.]*\.',
+        r'(?i)this is (often|sometimes|usually) associated with[^\.]*\.',
+        r'(?i)patients (often|sometimes|usually) experience[^\.]*\.',
+        r'(?i)treatment (options|may|might|includes|involves)[^\.]*\.',
+        r'(?i)risk factors[^\.]*\.',
+        r'(?i)causes (of|for|include)[^\.]*\.'
+    ]
+    
+    for pattern in symptom_patterns:
+        text = re.sub(pattern, '', text)
+    
+    # Remove any bullet list sections that might appear in the text
+    bullet_list_pattern = r'(?:\s*[•\*-]\s*[^\n]+\n?)+'
+    text = re.sub(bullet_list_pattern, ' ', text)
+    
+    # Clean up multiple spaces and ensure proper sentence spacing
+    text = re.sub(r' +', ' ', text)
+    text = re.sub(r'\.\s+', '. ', text)
+    
+    # Final check for any trailing symbols
+    text = text.rstrip('*• \t\n-')
+    
+    # Wrap in paragraph tags
+    return f"<p>{text}</p>"
 
 @app.route('/')
 def index():
@@ -439,5 +605,8 @@ def view_logs():
 if __name__ == '__main__':
     # Create a Flask app for standalone mode
     standalone_app = Flask(__name__)
+    
+    # Register the blueprint without a URL prefix for standalone mode
     standalone_app.register_blueprint(app)
+    
     standalone_app.run(host='0.0.0.0', port=8080, debug=True) 

@@ -105,7 +105,7 @@
         <h1 class="text-center mb-4">Medical Report Helper</h1>
         <div class="card shadow-sm">
             <div class="card-body">
-                <p class="card-text">This tool turns complicated medical reports into simple, easy-to-understand language that anyone can read.</p>
+                <p class="card-text">This tool turns complicated medical reports into simple, easy-to-understand language at a 6th grade reading level.</p>
                 
                 <form id="translationForm">
                     <div class="mb-3">
@@ -172,7 +172,7 @@
         
         <div class="footer">
             <p>This tool is for helping you understand medical terms only. Always talk to your doctor about your medical reports.</p>
-            <p><a href="/radiology/view-logs" class="text-muted">View Logs</a></p>
+            <p><a href="/view-logs" class="text-muted">View Logs</a></p>
         </div>
     </div>
 
@@ -218,7 +218,7 @@
                 translationResult.style.display = 'none';
                 
                 try {
-                    const response = await fetch('/radiology/translate', {
+                    const response = await fetch('/translate', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/x-www-form-urlencoded',
@@ -285,7 +285,7 @@
                 }
                 
                 try {
-                    const response = await fetch('/radiology/feedback', {
+                    const response = await fetch('/feedback', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
