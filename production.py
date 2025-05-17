@@ -35,28 +35,16 @@ if 'OPENAI_API_KEY' in os.environ:
 else:
     logger.error("No OpenAI API key found in environment variables. The application will likely fail.")
 
-# Monkey patch OpenAI Client to ignore 'proxies' parameter
+# We're using OpenAI v0.28.0, so we don't need to monkey patch the client
+# The v0.28.0 API uses a global configuration rather than a client instance
 try:
     # Try to import OpenAI
-    from openai import OpenAI
-    
-    # Save the original init method
-    original_init = OpenAI.__init__
-    
-    # Define a wrapper to ignore proxies
-    def patched_init(self, *args, **kwargs):
-        # Remove proxies from kwargs if present
-        if 'proxies' in kwargs:
-            logger.info("Removing 'proxies' parameter from OpenAI client initialization")
-            del kwargs['proxies']
-        # Call original init
-        return original_init(self, *args, **kwargs)
-    
-    # Patch the init method
-    OpenAI.__init__ = patched_init
-    logger.info("Successfully monkey patched OpenAI client to ignore 'proxies' parameter")
+    import openai
+    # Set the API key globally
+    openai.api_key = os.environ.get('OPENAI_API_KEY', '')
+    logger.info("Successfully configured OpenAI API key")
 except Exception as e:
-    logger.error(f"Failed to monkey patch OpenAI client: {e}")
+    logger.error(f"Failed to configure OpenAI: {e}")
     import traceback
     logger.error(f"Traceback: {traceback.format_exc()}")
 
