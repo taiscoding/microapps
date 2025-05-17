@@ -239,7 +239,10 @@ def translate_radiology_impression(impression):
     at a 6th grade reading level, without mentioning symptoms.
     """
     try:
-        response = openai.ChatCompletion.create(
+        from openai import OpenAI
+        client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+        
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You explain radiology results in simple, clear language for patients with no medical background. "
@@ -266,7 +269,7 @@ def translate_radiology_impression(impression):
             max_tokens=1000
         )
         
-        # Get the raw text - API response structure is different in v0.28
+        # Get the response text from the new API structure
         raw_text = response.choices[0].message.content
         
         # Always use format_single_paragraph rather than format_translation

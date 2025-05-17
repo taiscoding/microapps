@@ -35,16 +35,14 @@ if 'OPENAI_API_KEY' in os.environ:
 else:
     logger.error("No OpenAI API key found in environment variables. The application will likely fail.")
 
-# We're using OpenAI v0.28.0, so we don't need to monkey patch the client
-# The v0.28.0 API uses a global configuration rather than a client instance
+# Configure OpenAI with v1.0+ API
 try:
-    # Try to import OpenAI
-    import openai
-    # Set the API key globally
-    openai.api_key = os.environ.get('OPENAI_API_KEY', '')
-    logger.info("Successfully configured OpenAI API key")
+    # Just verify we can import the OpenAI module
+    # The actual client will be created in the app when needed
+    from openai import OpenAI
+    logger.info("Successfully verified OpenAI module is available")
 except Exception as e:
-    logger.error(f"Failed to configure OpenAI: {e}")
+    logger.error(f"Failed to import OpenAI module: {e}")
     import traceback
     logger.error(f"Traceback: {traceback.format_exc()}")
 
