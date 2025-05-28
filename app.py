@@ -8,8 +8,9 @@ from datetime import datetime
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Add radiologytool to path
+# Add tools to path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'radiologytool'))
+sys.path.append(os.path.join(os.path.dirname(__file__), 'lab_value_helper'))
 
 app = Flask(__name__)
 
@@ -27,6 +28,12 @@ def index():
             'description': 'Turns medical reports into simple language anyone can understand',
             'url': '/radiology',
             'icon': 'medical.svg'
+        },
+        {
+            'name': 'Lab Value Helper',
+            'description': 'Clinical significance engine that reduces alert fatigue by showing what lab values actually matter',
+            'url': '/lab-value-helper',
+            'icon': 'flask'
         }
         # Add more tools here as they become available
     ]
@@ -37,28 +44,42 @@ def radiology_redirect():
     """Redirect to the radiology tool"""
     return redirect('/radiology/')
 
+@app.route('/lab-value-helper')
+def lab_helper_redirect():
+    """Redirect to the lab value helper tool"""
+    return redirect('/lab-value-helper/')
+
 # Debug route to check if the app is running
 @app.route('/debug')
 def debug():
     """Debug endpoint to verify the application is running"""
     return "App is running. Registered blueprints: " + ", ".join([bp.name for bp in app.blueprints.values()])
 
+# Register radiologytool blueprint
 try:
-    # Import the radiologytool module
     import radiologytool.app
     logger.info("Successfully imported radiologytool.app module")
     
-    # Explicitly verify the blueprint exists
     if not hasattr(radiologytool.app, 'app'):
         logger.error("radiologytool.app module does not have an 'app' blueprint")
         raise AttributeError("radiologytool.app module does not have an 'app' blueprint")
         
-    # Mount the radiology tool app
     app.register_blueprint(radiologytool.app.app, url_prefix='/radiology')
     logger.info("Successfully registered radiologytool blueprint")
 except Exception as e:
     logger.error(f"Error registering radiologytool blueprint: {e}")
-    # Add stack trace for better debugging
+    import traceback
+    logger.error(f"Traceback: {traceback.format_exc()}")
+
+# Register lab value helper blueprint
+try:
+    import lab_value_helper.app
+    logger.info("Successfully imported lab_value_helper.app module")
+    
+    app.register_blueprint(lab_value_helper.app.app, url_prefix='/lab-value-helper')
+    logger.info("Successfully registered lab_value_helper blueprint")
+except Exception as e:
+    logger.error(f"Error registering lab_value_helper blueprint: {e}")
     import traceback
     logger.error(f"Traceback: {traceback.format_exc()}")
 

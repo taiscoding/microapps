@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lab Value Helper - Clinical Significance Engine</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        medical: {
+                            blue: '#1e40af',
+                            green: '#059669',
+                            gray: '#6b7280'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .significance-normal { border-left: 4px solid #6b7280; }
+        .significance-likely_insignificant { border-left: 4px solid #9ca3af; }
+        .significance-possibly_significant { border-left: 4px solid #f59e0b; }
+        .significance-clinically_significant { border-left: 4px solid #ea580c; }
+        .significance-critical { border-left: 4px solid #dc2626; }
+        
+        .input-focus:focus {
+            ring-color: #1e40af;
+            border-color: #1e40af;
+        }
+        
+        /* Significance Icons */
+        .icon-normal { color: #059669; }
+        .icon-likely-insignificant { color: #6b7280; }
+        .icon-possibly-significant { color: #f59e0b; }
+        .icon-clinically-significant { color: #ea580c; }
+        .icon-critical { color: #dc2626; }
+        
+        /* Pulse animation for critical values */
+        .pulse-critical {
+            animation: pulse-red 2s infinite;
+        }
+        
+        @keyframes pulse-red {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        /* Range indicator styles */
+        .range-indicator {
+            height: 4px;
+            background: linear-gradient(to right, #ef4444, #f59e0b, #10b981);
+            border-radius: 2px;
+            position: relative;
+        }
+        
+        .range-marker {
+            position: absolute;
+            top: -2px;
+            width: 8px;
+            height: 8px;
+            background: #1f2937;
+            border-radius: 50%;
+            transform: translateX(-50%);
+        }
+        
+        /* Mobile responsive improvements */
+        @media (max-width: 768px) {
+            .touch-target {
+                min-height: 44px;
+                min-width: 44px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center">
+                    <i class="fas fa-flask text-medical-blue text-2xl mr-3"></i>
+                    <h1 class="text-2xl font-bold text-gray-900">Lab Value Helper</h1>
+                    <span class="ml-3 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
+                        Clinical Significance Engine
+                    </span>
+                </div>
+                <div class="text-sm text-gray-500">
+                    Reduces alert fatigue • Evidence-based
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Quick Stats Banner -->
+        <div id="summary-banner" class="hidden mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <div class="mb-3">
+                <h3 id="summary-header" class="text-lg font-semibold text-gray-900">Clinical Assessment Summary</h3>
+                <p id="summary-message" class="text-sm text-gray-600"></p>
+            </div>
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-6">
+                    <div class="text-center">
+                        <div id="total-tests" class="text-2xl font-bold text-gray-900">0</div>
+                        <div class="text-sm text-gray-500">Total Tests</div>
+                    </div>
+                    <div class="text-center">
+                        <div id="need-attention-count" class="text-2xl font-bold text-orange-600">0</div>
+                        <div class="text-sm text-gray-500">Need Attention</div>
+                    </div>
+                    <div class="text-center">
+                        <div id="normal-count" class="text-2xl font-bold text-green-600">0</div>
+                        <div class="text-sm text-gray-500">Normal</div>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button id="show-all-btn" class="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors touch-target">
+                        Show All
+                    </button>
+                    <button id="actionable-only-btn" class="px-3 py-1 text-sm bg-orange-100 text-orange-700 rounded hover:bg-orange-200 transition-colors touch-target">
+                        Actionable Only
+                    </button>
+                </div>
+            </div>
+            <!-- Detailed breakdown -->
+            <div class="mt-4 pt-4 border-t border-gray-200">
+                <div class="text-sm text-gray-600 mb-2">Significance Breakdown:</div>
+                <div class="flex items-center space-x-4 text-xs">
+                    <div class="flex items-center">
+                        <i class="fas fa-exclamation-circle icon-critical mr-1"></i>
+                        <span id="critical-count" class="font-medium">0</span> Critical
+                    </div>
+                    <div class="flex items-center">
+                        <i class="fas fa-diamond icon-clinically-significant mr-1"></i>
+                        <span id="clinically-significant-count" class="font-medium">0</span> Clinically Significant
+                    </div>
+                    <div class="flex items-center">
+                        <i class="fas fa-exclamation-triangle icon-possibly-significant mr-1"></i>
+                        <span id="possibly-significant-count" class="font-medium">0</span> Possibly Significant
+                    </div>
+                    <div class="flex items-center">
+                        <i class="fas fa-minus-circle icon-likely-insignificant mr-1"></i>
+                        <span id="likely-insignificant-count" class="font-medium">0</span> Likely Insignificant
+                    </div>
+                    <div class="flex items-center">
+                        <i class="fas fa-check-circle icon-normal mr-1"></i>
+                        <span id="normal-count-detail" class="font-medium">0</span> Normal
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Input Panel -->
+            <div class="lg:col-span-1">
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">
+                        <i class="fas fa-user-md text-medical-blue mr-2"></i>
+                        Patient Context
+                    </h2>
+                    
+                    <!-- Patient Demographics -->
+                    <div class="space-y-4 mb-6">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Age</label>
+                                <input type="number" id="patient-age" class="w-full px-3 py-2 border border-gray-300 rounded-md input-focus" placeholder="30">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Sex</label>
+                                <select id="patient-sex" class="w-full px-3 py-2 border border-gray-300 rounded-md input-focus">
+                                    <option value="">Unknown</option>
+                                    <option value="female">Female</option>
+                                    <option value="male">Male</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="flex items-center">
+                                <input type="checkbox" id="fasting-status" class="mr-2">
+                                <span class="text-sm text-gray-700">Fasting sample</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <h3 class="text-md font-semibold text-gray-900 mb-4">
+                        <i class="fas fa-vial text-medical-blue mr-2"></i>
+                        Add Lab Value
+                    </h3>
+                    
+                    <!-- Single Lab Input -->
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Test Name *</label>
+                            <input type="text" id="test-name" required class="w-full px-3 py-3 border border-gray-300 rounded-md input-focus touch-target" 
+                                   placeholder="e.g., Hemoglobin, K, Creatinine">
+                            <div class="text-xs text-gray-500 mt-1">
+                                Accepts common abbreviations
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Value *</label>
+                            <input type="number" id="test-value" step="0.01" required class="w-full px-3 py-3 border border-gray-300 rounded-md input-focus touch-target" 
+                                   placeholder="0.0">
+                        </div>
+                        <button id="evaluate-single" class="w-full bg-medical-blue text-white py-3 px-4 rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed touch-target">
+                            <i class="fas fa-search mr-2"></i>
+                            <span id="evaluate-btn-text">Evaluate Lab Value</span>
+                        </button>
+                    </div>
+
+                    <!-- Bulk Input -->
+                    <div class="mt-6 pt-6 border-t border-gray-200">
+                        <h3 class="text-md font-semibold text-gray-900 mb-3">
+                            <i class="fas fa-list text-medical-blue mr-2"></i>
+                            Bulk Input
+                        </h3>
+                        <textarea id="bulk-input" class="w-full px-3 py-3 border border-gray-300 rounded-md input-focus touch-target" 
+                                  rows="4" placeholder="Paste lab panel:
+Hemoglobin: 11.8
+Potassium: 3.3
+Creatinine: 1.1
+Glucose: 105"></textarea>
+                        <button id="evaluate-bulk" class="w-full mt-3 bg-green-600 text-white py-3 px-4 rounded-md hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed touch-target">
+                            <i class="fas fa-layer-group mr-2"></i>
+                            <span id="bulk-btn-text">Evaluate Panel</span>
+                        </button>
+                    </div>
+
+                    <!-- Available Tests -->
+                    <div class="mt-6 pt-6 border-t border-gray-200">
+                        <details class="group">
+                            <summary class="cursor-pointer text-sm font-medium text-gray-700 hover:text-gray-900">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                Supported Lab Tests
+                            </summary>
+                            <div class="mt-2 text-xs text-gray-600 space-y-1">
+                                <div><strong>Hemoglobin:</strong> Hgb, Hb</div>
+                                <div><strong>Creatinine:</strong> Cr, Creat</div>
+                                <div><strong>Potassium:</strong> K, K+</div>
+                                <div><strong>Glucose:</strong> Gluc, BG</div>
+                                <div><strong>TSH:</strong> Thyroid Stimulating Hormone</div>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Panel -->
+            <div class="lg:col-span-2">
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-lg font-semibold text-gray-900">
+                            <i class="fas fa-chart-line text-medical-blue mr-2"></i>
+                            Clinical Assessment
+                        </h2>
+                        <button id="clear-results" class="text-sm text-gray-500 hover:text-gray-700 px-3 py-2 rounded hover:bg-gray-100 transition-colors touch-target">
+                            <i class="fas fa-trash mr-1"></i>
+                            Clear All
+                        </button>
+                    </div>
+
+                    <!-- Results Container -->
+                    <div id="results-container" class="space-y-4">
+                        <!-- Welcome Message -->
+                        <div id="welcome-message" class="text-center py-12 text-gray-500">
+                            <i class="fas fa-stethoscope text-4xl mb-4"></i>
+                            <h3 class="text-lg font-medium mb-2">Clinical Lab Value Interpreter</h3>
+                            <p class="text-sm">Enter lab values to see clinical significance assessment</p>
+                            <div class="mt-4 text-xs flex flex-wrap justify-center gap-3">
+                                <span class="inline-flex items-center">
+                                    <i class="fas fa-check-circle icon-normal mr-1"></i>
+                                    Normal
+                                </span>
+                                <span class="inline-flex items-center">
+                                    <i class="fas fa-minus-circle icon-likely-insignificant mr-1"></i>
+                                    Likely Insignificant
+                                </span>
+                                <span class="inline-flex items-center">
+                                    <i class="fas fa-exclamation-triangle icon-possibly-significant mr-1"></i>
+                                    Possibly Significant
+                                </span>
+                                <span class="inline-flex items-center">
+                                    <i class="fas fa-diamond icon-clinically-significant mr-1"></i>
+                                    Clinically Significant
+                                </span>
+                                <span class="inline-flex items-center">
+                                    <i class="fas fa-exclamation-circle icon-critical mr-1 pulse-critical"></i>
+                                    Critical
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div id="loading-spinner" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-lg shadow-lg">
+            <div class="flex items-center">
+                <i class="fas fa-spinner fa-spin text-medical-blue text-xl mr-3"></i>
+                <span class="text-gray-700">Analyzing lab values...</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allResults = [];
+        let showingActionableOnly = false;
+        let isEvaluating = false;
+        let currentRequest = null; // Track current request for cleanup
+        let debounceTimer = null; // Debounce timer for rapid clicks
+        let requestQueue = []; // Queue for managing multiple requests
+
+        // Helper functions for safe DOM manipulation
+        function safeGetElement(id) {
+            const element = document.getElementById(id);
+            if (!element) {
+                console.warn(`Element with ID '${id}' not found`);
+            }
+            return element;
+        }
+
+        function safeAddClass(elementId, className) {
+            const element = safeGetElement(elementId);
+            if (element && element.classList) {
+                element.classList.add(className);
+                return true;
+            }
+            return false;
+        }
+
+        function safeRemoveClass(elementId, className) {
+            const element = safeGetElement(elementId);
+            if (element && element.classList) {
+                element.classList.remove(className);
+                return true;
+            }
+            return false;
+        }
+
+        function safeToggleClass(elementId, className, force) {
+            const element = safeGetElement(elementId);
+            if (element && element.classList) {
+                if (force !== undefined) {
+                    element.classList.toggle(className, force);
+                } else {
+                    element.classList.toggle(className);
+                }
+                return true;
+            }
+            return false;
+        }
+
+        function safeClassListOperation(elementId, operation, ...args) {
+            const element = safeGetElement(elementId);
+            if (element && element.classList && typeof element.classList[operation] === 'function') {
+                try {
+                    element.classList[operation](...args);
+                    return true;
+                } catch (error) {
+                    console.error(`Error performing classList.${operation} on element ${elementId}:`, error);
+                }
+            }
+            return false;
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            setupEventListeners();
+            console.log('Lab Value Helper initialized - Network debugging enabled');
+        });
+
+        function setupEventListeners() {
+            const evaluateSingleBtn = document.getElementById('evaluate-single');
+            const evaluateBulkBtn = document.getElementById('evaluate-bulk');
+            const clearResultsBtn = document.getElementById('clear-results');
+            const showAllBtn = document.getElementById('show-all-btn');
+            const actionableOnlyBtn = document.getElementById('actionable-only-btn');
+            const testValueInput = document.getElementById('test-value');
+            const testNameInput = document.getElementById('test-name');
+            const resultsContainer = document.getElementById('results-container');
+            
+            if (evaluateSingleBtn) {
+                evaluateSingleBtn.addEventListener('click', handleSingleEvaluation);
+            }
+            if (evaluateBulkBtn) {
+                evaluateBulkBtn.addEventListener('click', handleBulkEvaluation);
+            }
+            if (clearResultsBtn) {
+                clearResultsBtn.addEventListener('click', handleClearAllResults);
+            }
+            if (showAllBtn) {
+                showAllBtn.addEventListener('click', () => toggleView(false));
+            }
+            if (actionableOnlyBtn) {
+                actionableOnlyBtn.addEventListener('click', () => toggleView(true));
+            }
+            
+            // Event delegation for remove buttons
+            if (resultsContainer) {
+                resultsContainer.addEventListener('click', function(e) {
+                    const removeBtn = e.target.closest('.remove-result-btn');
+                    if (removeBtn) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const timestamp = removeBtn.getAttribute('data-timestamp');
+                        if (timestamp) {
+                            removeResult(timestamp);
+                        }
+                    }
+                });
+            }
+            
+            // Enter key support with debouncing
+            if (testValueInput) {
+                testValueInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter' && !isEvaluating) {
+                        e.preventDefault();
+                        handleSingleEvaluation();
+                    }
+                });
+            }
+            
+            // Form validation
+            if (testNameInput) {
+                testNameInput.addEventListener('input', validateForm);
+            }
+            if (testValueInput) {
+                testValueInput.addEventListener('input', validateForm);
+            }
+        }
+
+        // Debounced evaluation handlers
+        function handleSingleEvaluation() {
+            console.log('Single evaluation requested, isEvaluating:', isEvaluating);
+            
+            if (isEvaluating) {
+                console.log('Request blocked - already evaluating');
+                return;
+            }
+
+            // Clear any existing debounce timer
+            if (debounceTimer) {
+                clearTimeout(debounceTimer);
+            }
+
+            // Debounce rapid clicks (300ms delay)
+            debounceTimer = setTimeout(() => {
+                evaluateSingleLab();
+            }, 300);
+        }
+
+        function handleBulkEvaluation() {
+            console.log('Bulk evaluation requested, isEvaluating:', isEvaluating);
+            
+            if (isEvaluating) {
+                console.log('Request blocked - already evaluating');
+                return;
+            }
+
+            // Clear any existing debounce timer
+            if (debounceTimer) {
+                clearTimeout(debounceTimer);
+            }
+
+            // Debounce rapid clicks (300ms delay)
+            debounceTimer = setTimeout(() => {
+                evaluateBulkLabs();
+            }, 300);
+        }
+
+        function validateForm() {
+            const testNameEl = document.getElementById('test-name');
+            const testValueEl = document.getElementById('test-value');
+            const evaluateBtn = document.getElementById('evaluate-single');
+            
+            if (!testNameEl || !testValueEl || !evaluateBtn) {
+                console.warn('Form validation skipped - missing elements');
+                return;
+            }
+            
+            const testName = testNameEl.value.trim();
+            const testValue = testValueEl.value.trim();
+            
+            evaluateBtn.disabled = !testName || !testValue || isEvaluating;
+        }
+
+        function getPatientContext() {
+            const ageEl = document.getElementById('patient-age');
+            const sexEl = document.getElementById('patient-sex');
+            const fastingEl = document.getElementById('fasting-status');
+            
+            return {
+                age: ageEl ? parseInt(ageEl.value) || 30 : 30,
+                sex: sexEl ? sexEl.value : '',
+                fasting: fastingEl ? fastingEl.checked : false
+            };
+        }
+
+        async function evaluateSingleLab() {
+            const testNameEl = document.getElementById('test-name');
+            const testValueEl = document.getElementById('test-value');
+            
+            if (!testNameEl || !testValueEl) {
+                showError('Form elements not found');
+                return;
+            }
+            
+            const testName = testNameEl.value.trim();
+            const testValue = testValueEl.value.trim();
+            
+            if (!testName || !testValue) {
+                showError('Please enter both test name and value');
+                return;
+            }
+
+            if (isEvaluating) {
+                console.log('Evaluation already in progress, skipping');
+                return;
+            }
+
+            console.log('Starting single lab evaluation:', { testName, testValue });
+            setEvaluatingState(true);
+            
+            // Cancel any pending request
+            if (currentRequest) {
+                console.log('Cancelling previous request');
+                currentRequest.abort();
+                currentRequest = null;
+            }
+
+            // Create AbortController for request cancellation
+            const controller = new AbortController();
+            currentRequest = controller;
+
+            try {
+                console.log('Making API request to /lab-value-helper/evaluate');
+                
+                const response = await fetch('/lab-value-helper/evaluate', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Cache-Control': 'no-cache'
+                    },
+                    body: JSON.stringify({
+                        test_name: testName,
+                        value: parseFloat(testValue),
+                        patient_context: getPatientContext()
+                    }),
+                    signal: controller.signal,
+                    timeout: 10000 // 10 second timeout
+                });
+                
+                console.log('API response received:', response.status, response.statusText);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                console.log('API result parsed:', result);
+                
+                if (result.error) {
+                    showError(result.error);
+                } else {
+                    addResult(result);
+                    clearSingleInputs();
+                    console.log('Single lab evaluation completed successfully');
+                }
+            } catch (error) {
+                console.error('Single lab evaluation error:', error);
+                
+                if (error.name === 'AbortError') {
+                    console.log('Request was cancelled');
+                    return;
+                }
+                
+                // Enhanced error handling with retry logic
+                handleNetworkError(error, () => evaluateSingleLab());
+            } finally {
+                currentRequest = null;
+                setEvaluatingState(false);
+                console.log('Single lab evaluation cleanup completed');
+            }
+        }
+
+        async function evaluateBulkLabs() {
+            const bulkInputEl = document.getElementById('bulk-input');
+            
+            if (!bulkInputEl) {
+                showError('Bulk input element not found');
+                return;
+            }
+            
+            const bulkText = bulkInputEl.value.trim();
+            if (!bulkText) {
+                showError('Please enter lab values');
+                return;
+            }
+
+            if (isEvaluating) {
+                console.log('Bulk evaluation already in progress, skipping');
+                return;
+            }
+
+            // Parse bulk input
+            const labValues = parseBulkInput(bulkText);
+            if (labValues.length === 0) {
+                showError('No valid lab values found in input');
+                return;
+            }
+
+            console.log('Starting bulk lab evaluation:', labValues.length, 'tests');
+            setEvaluatingState(true, true);
+            
+            // Cancel any pending request
+            if (currentRequest) {
+                console.log('Cancelling previous request');
+                currentRequest.abort();
+                currentRequest = null;
+            }
+
+            // Create AbortController for request cancellation
+            const controller = new AbortController();
+            currentRequest = controller;
+            
+            try {
+                console.log('Making API request to /lab-value-helper/bulk_evaluate');
+                
+                const response = await fetch('/lab-value-helper/bulk_evaluate', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Cache-Control': 'no-cache'
+                    },
+                    body: JSON.stringify({
+                        lab_values: labValues,
+                        patient_context: getPatientContext()
+                    }),
+                    signal: controller.signal,
+                    timeout: 15000 // 15 second timeout for bulk operations
+                });
+                
+                console.log('Bulk API response received:', response.status, response.statusText);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('Bulk API result parsed:', data.results.length, 'results');
+                
+                // Add all results
+                data.results.forEach((result, index) => {
+                    if (!result.error) {
+                        addResult(result);
+                    } else {
+                        console.warn(`Result ${index} had error:`, result.error);
+                    }
+                });
+                
+                // Update summary
+                updateSummary(data.summary);
+                bulkInputEl.value = '';
+                console.log('Bulk lab evaluation completed successfully');
+                
+            } catch (error) {
+                console.error('Bulk lab evaluation error:', error);
+                
+                if (error.name === 'AbortError') {
+                    console.log('Bulk request was cancelled');
+                    return;
+                }
+                
+                // Enhanced error handling with retry logic
+                handleNetworkError(error, () => evaluateBulkLabs());
+            } finally {
+                currentRequest = null;
+                setEvaluatingState(false, true);
+                console.log('Bulk lab evaluation cleanup completed');
+            }
+        }
+
+        function handleNetworkError(error, retryFunction) {
+            console.error('Network error details:', {
+                name: error.name,
+                message: error.message,
+                stack: error.stack
+            });
+
+            let errorMessage = 'Network error occurred. ';
+            let showRetry = false;
+
+            if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                errorMessage += 'Unable to connect to server. Check your connection.';
+                showRetry = true;
+            } else if (error.message.includes('timeout')) {
+                errorMessage += 'Request timed out. Server may be busy.';
+                showRetry = true;
+            } else if (error.message.includes('HTTP 5')) {
+                errorMessage += 'Server error. Please try again.';
+                showRetry = true;
+            } else {
+                errorMessage += error.message || 'Please try again.';
+                showRetry = true;
+            }
+
+            showErrorWithRetry(errorMessage, showRetry ? retryFunction : null);
+        }
+
+        function setEvaluatingState(evaluating, isBulk = false) {
+            console.log('Setting evaluating state:', evaluating, 'isBulk:', isBulk);
+            isEvaluating = evaluating;
+            
+            const singleBtn = document.getElementById('evaluate-single');
+            const bulkBtn = document.getElementById('evaluate-bulk');
+            const singleText = document.getElementById('evaluate-btn-text');
+            const bulkText = document.getElementById('bulk-btn-text');
+            
+            if (evaluating) {
+                // Disable all buttons during evaluation
+                if (singleBtn) singleBtn.disabled = true;
+                if (bulkBtn) bulkBtn.disabled = true;
+                showLoading(true);
+                
+                if (isBulk) {
+                    if (bulkText) bulkText.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Analyzing...';
+                } else {
+                    if (singleText) singleText.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Analyzing...';
+                }
+            } else {
+                showLoading(false);
+                if (singleText) singleText.innerHTML = 'Evaluate Lab Value';
+                if (bulkText) bulkText.innerHTML = 'Evaluate Panel';
+                
+                // Re-enable buttons based on form state
+                validateForm(); // This will properly enable/disable single button
+                if (bulkBtn) bulkBtn.disabled = false;
+            }
+        }
+
+        function parseBulkInput(text) {
+            const lines = text.split('\n');
+            const labValues = [];
+            
+            for (const line of lines) {
+                const match = line.match(/^(.+?)[:=]\s*(.+)$/);
+                if (match) {
+                    const testName = match[1].trim();
+                    const value = parseFloat(match[2].trim());
+                    if (!isNaN(value)) {
+                        labValues.push({ test_name: testName, value: value });
+                    }
+                }
+            }
+            
+            return labValues;
+        }
+
+        function addResult(result) {
+            allResults.push(result);
+            renderResults();
+            updateSummaryFromResults();
+        }
+
+        function renderResults() {
+            const container = document.getElementById('results-container');
+            const welcome = document.getElementById('welcome-message');
+            
+            if (!container) {
+                console.error('Results container not found');
+                return;
+            }
+            
+            if (allResults.length === 0) {
+                if (welcome && welcome.classList) {
+                    welcome.classList.remove('hidden');
+                }
+                return;
+            }
+            
+            if (welcome && welcome.classList) {
+                welcome.classList.add('hidden');
+            }
+            
+            // Sort results by significance level (Critical first)
+            const sortedResults = [...allResults].sort((a, b) => (b.level || 1) - (a.level || 1));
+            
+            const resultsToShow = showingActionableOnly 
+                ? sortedResults.filter(r => r.level >= 3)
+                : sortedResults;
+            
+            container.innerHTML = resultsToShow.map(result => createResultCard(result)).join('');
+        }
+
+        function createResultCard(result) {
+            const significance = result.significance || 'normal';
+            const icon = getSignificanceIcon(significance);
+            const rangeIndicator = createRangeIndicator(result);
+            
+            // Ensure timestamp exists for removal
+            if (!result.timestamp) {
+                console.warn('Result missing timestamp, generating one:', result);
+                result.timestamp = new Date().toISOString() + '_' + Math.random().toString(36).substr(2, 9);
+            }
+            
+            return `
+                <div class="significance-${significance} ${result.bg || ''} p-4 rounded-lg" data-timestamp="${result.timestamp}">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <div class="flex items-center mb-2">
+                                ${icon}
+                                <h3 class="font-semibold text-gray-900 ml-2">${result.test_name}</h3>
+                                <span class="ml-2 px-2 py-1 text-xs font-medium rounded ${result.color || 'text-gray-600'} ${result.bg || ''}">
+                                    ${result.label || 'Normal'}
+                                </span>
+                            </div>
+                            <div class="text-lg font-mono mb-2">
+                                <span class="font-bold">${result.value} ${result.unit}</span>
+                            </div>
+                            <div class="text-xs text-gray-600 mb-3">
+                                <strong>Reference:</strong> ${result.reference_range || 'See clinical guidelines'}
+                            </div>
+                            ${rangeIndicator}
+                            <p class="text-sm text-gray-700 mb-2 mt-3">
+                                <strong>Clinical Pearl:</strong> ${result.clinical_pearl}
+                            </p>
+                            <p class="text-sm text-gray-600">
+                                <strong>Action:</strong> ${result.action}
+                            </p>
+                        </div>
+                        <button 
+                            onclick="removeResult('${result.timestamp}')" 
+                            class="remove-result-btn text-gray-400 hover:text-gray-600 ml-4 p-2 rounded hover:bg-gray-100 transition-colors touch-target"
+                            data-timestamp="${result.timestamp}"
+                            title="Remove this result"
+                            aria-label="Remove ${result.test_name} result"
+                        >
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function getSignificanceIcon(significance) {
+            const iconMap = {
+                'normal': '<i class="fas fa-check-circle icon-normal text-xl"></i>',
+                'likely_insignificant': '<i class="fas fa-minus-circle icon-likely-insignificant text-xl"></i>',
+                'possibly_significant': '<i class="fas fa-exclamation-triangle icon-possibly-significant text-xl"></i>',
+                'clinically_significant': '<i class="fas fa-diamond icon-clinically-significant text-xl"></i>',
+                'critical': '<i class="fas fa-exclamation-circle icon-critical text-xl pulse-critical"></i>'
+            };
+            return iconMap[significance] || iconMap['normal'];
+        }
+
+        function createRangeIndicator(result) {
+            // Simple visual range indicator - could be enhanced with actual range parsing
+            return `
+                <div class="mb-2">
+                    <div class="text-xs text-gray-500 mb-1">Value Position</div>
+                    <div class="range-indicator">
+                        <div class="range-marker" style="left: ${getValuePosition(result)}%"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function getValuePosition(result) {
+            // Simplified positioning based on significance
+            const positionMap = {
+                'critical': result.level === 5 ? (result.value > 100 ? 90 : 10) : 50,
+                'clinically_significant': result.level === 4 ? 75 : 25,
+                'possibly_significant': result.level === 3 ? 65 : 35,
+                'likely_insignificant': 45,
+                'normal': 50
+            };
+            return positionMap[result.significance] || 50;
+        }
+
+        function removeResult(timestamp) {
+            console.log('Removing result with timestamp:', timestamp);
+            
+            // Find the result to remove for logging
+            const resultToRemove = allResults.find(r => r.timestamp === timestamp);
+            if (resultToRemove) {
+                console.log('Removing result:', resultToRemove.test_name, '=', resultToRemove.value);
+            }
+            
+            // Filter out the result
+            const originalLength = allResults.length;
+            allResults = allResults.filter(r => r.timestamp !== timestamp);
+            
+            // Verify removal
+            if (allResults.length === originalLength) {
+                console.warn('Result not found for removal:', timestamp);
+                return;
+            }
+            
+            console.log('Results after removal:', allResults.length);
+            
+            // Update display and summary
+            renderResults();
+            updateSummaryFromResults();
+            
+            // If no results left, show welcome message
+            if (allResults.length === 0) {
+                const welcome = document.getElementById('welcome-message');
+                if (welcome && welcome.classList) {
+                    welcome.classList.remove('hidden');
+                }
+            }
+        }
+
+        function clearAllResults() {
+            console.log('Clearing all results and resetting form state');
+            
+            // Cancel any pending requests
+            if (currentRequest) {
+                console.log('Cancelling pending request during clear');
+                currentRequest.abort();
+                currentRequest = null;
+            }
+
+            // Clear debounce timer
+            if (debounceTimer) {
+                clearTimeout(debounceTimer);
+                debounceTimer = null;
+            }
+
+            // Reset evaluation state
+            isEvaluating = false;
+            
+            // Clear all results
+            const previousCount = allResults.length;
+            allResults = [];
+            console.log('Cleared', previousCount, 'results');
+            
+            // Reset all form fields
+            const testNameEl = document.getElementById('test-name');
+            const testValueEl = document.getElementById('test-value');
+            const bulkInputEl = document.getElementById('bulk-input');
+            const patientAgeEl = document.getElementById('patient-age');
+            const patientSexEl = document.getElementById('patient-sex');
+            const fastingStatusEl = document.getElementById('fasting-status');
+            
+            if (testNameEl) testNameEl.value = '';
+            if (testValueEl) testValueEl.value = '';
+            if (bulkInputEl) bulkInputEl.value = '';
+            if (patientAgeEl) patientAgeEl.value = '';
+            if (patientSexEl) patientSexEl.value = '';
+            if (fastingStatusEl) fastingStatusEl.checked = false;
+            
+            // Reset view filter to show all
+            showingActionableOnly = false;
+            
+            // Update button states for view filter
+            const showAllBtn = document.getElementById('show-all-btn');
+            const actionableBtn = document.getElementById('actionable-only-btn');
+            
+            if (showAllBtn && showAllBtn.classList) {
+                showAllBtn.classList.remove('bg-gray-100');
+                showAllBtn.classList.add('bg-gray-200');
+            }
+            if (actionableBtn && actionableBtn.classList) {
+                actionableBtn.classList.remove('bg-orange-200');
+                actionableBtn.classList.add('bg-orange-100');
+            }
+            
+            // Clear the results display and show welcome message
+            renderResults();
+            
+            // Explicitly show welcome message
+            const welcome = document.getElementById('welcome-message');
+            if (welcome && welcome.classList) {
+                welcome.classList.remove('hidden');
+            }
+            
+            // Hide summary banner safely
+            safeAddClass('summary-banner', 'hidden');
+            
+            // Reset summary counts to 0
+            const totalTestsEl = document.getElementById('total-tests');
+            const needAttentionCountEl = document.getElementById('need-attention-count');
+            const normalCountEl = document.getElementById('normal-count');
+            const criticalCountEl = document.getElementById('critical-count');
+            const clinicallySignificantCountEl = document.getElementById('clinically-significant-count');
+            const possiblySignificantCountEl = document.getElementById('possibly-significant-count');
+            const likelyInsignificantCountEl = document.getElementById('likely-insignificant-count');
+            const normalCountDetailEl = document.getElementById('normal-count-detail');
+            
+            if (totalTestsEl) totalTestsEl.textContent = '0';
+            if (needAttentionCountEl) needAttentionCountEl.textContent = '0';
+            if (normalCountEl) normalCountEl.textContent = '0';
+            if (criticalCountEl) criticalCountEl.textContent = '0';
+            if (clinicallySignificantCountEl) clinicallySignificantCountEl.textContent = '0';
+            if (possiblySignificantCountEl) possiblySignificantCountEl.textContent = '0';
+            if (likelyInsignificantCountEl) likelyInsignificantCountEl.textContent = '0';
+            if (normalCountDetailEl) normalCountDetailEl.textContent = '0';
+            
+            // Reset form validation and button states
+            validateForm();
+            setEvaluatingState(false);
+            
+            console.log('Clear all completed - all state reset');
+        }
+
+        function clearSingleInputs() {
+            const testNameEl = document.getElementById('test-name');
+            const testValueEl = document.getElementById('test-value');
+            
+            if (testNameEl) testNameEl.value = '';
+            if (testValueEl) testValueEl.value = '';
+            validateForm();
+        }
+
+        function updateSummary(summary) {
+            safeRemoveClass('summary-banner', 'hidden');
+            
+            const totalTestsEl = document.getElementById('total-tests');
+            const needAttentionCountEl = document.getElementById('need-attention-count');
+            const normalCountEl = document.getElementById('normal-count');
+            const summaryMessageEl = document.getElementById('summary-message');
+            
+            if (totalTestsEl) totalTestsEl.textContent = summary.total_tests;
+            if (needAttentionCountEl) needAttentionCountEl.textContent = summary.need_attention_count;
+            if (normalCountEl) normalCountEl.textContent = summary.normal_count;
+            
+            // Update detailed breakdown
+            const criticalCountEl = document.getElementById('critical-count');
+            const clinicallySignificantCountEl = document.getElementById('clinically-significant-count');
+            const possiblySignificantCountEl = document.getElementById('possibly-significant-count');
+            const likelyInsignificantCountEl = document.getElementById('likely-insignificant-count');
+            const normalCountDetailEl = document.getElementById('normal-count-detail');
+            
+            if (criticalCountEl) criticalCountEl.textContent = summary.critical_count || 0;
+            if (clinicallySignificantCountEl) clinicallySignificantCountEl.textContent = summary.clinically_significant_count || 0;
+            if (possiblySignificantCountEl) possiblySignificantCountEl.textContent = summary.possibly_significant_count || 0;
+            if (likelyInsignificantCountEl) likelyInsignificantCountEl.textContent = summary.likely_insignificant_count || 0;
+            if (normalCountDetailEl) normalCountDetailEl.textContent = summary.normal_count || 0;
+            
+            // Update summary message
+            const message = `${summary.need_attention_count} result${summary.need_attention_count !== 1 ? 's' : ''} need attention, ${summary.normal_count} normal`;
+            if (summaryMessageEl) summaryMessageEl.textContent = message;
+        }
+
+        function updateSummaryFromResults() {
+            if (allResults.length === 0) {
+                safeAddClass('summary-banner', 'hidden');
+                return;
+            }
+            
+            // Count each significance level
+            const criticalCount = allResults.filter(r => r.significance === 'critical').length;
+            const clinicallySignificantCount = allResults.filter(r => r.significance === 'clinically_significant').length;
+            const possiblySignificantCount = allResults.filter(r => r.significance === 'possibly_significant').length;
+            const likelyInsignificantCount = allResults.filter(r => r.significance === 'likely_insignificant').length;
+            const normalCount = allResults.filter(r => r.significance === 'normal').length;
+            
+            // "Need attention" includes all non-normal categories
+            const needAttentionCount = criticalCount + clinicallySignificantCount + possiblySignificantCount + likelyInsignificantCount;
+            
+            updateSummary({
+                total_tests: allResults.length,
+                need_attention_count: needAttentionCount,
+                normal_count: normalCount,
+                critical_count: criticalCount,
+                clinically_significant_count: clinicallySignificantCount,
+                possibly_significant_count: possiblySignificantCount,
+                likely_insignificant_count: likelyInsignificantCount
+            });
+        }
+
+        function toggleView(actionableOnly) {
+            showingActionableOnly = actionableOnly;
+            
+            // Update button states safely
+            const showAllBtn = document.getElementById('show-all-btn');
+            const actionableBtn = document.getElementById('actionable-only-btn');
+            
+            if (actionableOnly) {
+                if (showAllBtn && showAllBtn.classList) {
+                    showAllBtn.classList.remove('bg-gray-200');
+                    showAllBtn.classList.add('bg-gray-100');
+                }
+                if (actionableBtn && actionableBtn.classList) {
+                    actionableBtn.classList.remove('bg-orange-100');
+                    actionableBtn.classList.add('bg-orange-200');
+                }
+            } else {
+                if (showAllBtn && showAllBtn.classList) {
+                    showAllBtn.classList.remove('bg-gray-100');
+                    showAllBtn.classList.add('bg-gray-200');
+                }
+                if (actionableBtn && actionableBtn.classList) {
+                    actionableBtn.classList.remove('bg-orange-200');
+                    actionableBtn.classList.add('bg-orange-100');
+                }
+            }
+            
+            renderResults();
+        }
+
+        function showLoading(show) {
+            safeToggleClass('loading-spinner', 'hidden', !show);
+        }
+
+        function showError(message) {
+            showErrorWithRetry(message, null);
+        }
+
+        function showErrorWithRetry(message, retryFunction) {
+            console.log('Showing error:', message, 'with retry:', !!retryFunction);
+            
+            try {
+                // Remove any existing error messages
+                const existingErrors = document.querySelectorAll('.error-notification');
+                existingErrors.forEach(error => {
+                    try {
+                        error.remove();
+                    } catch (e) {
+                        console.warn('Error removing existing error notification:', e);
+                    }
+                });
+                
+                // Enhanced error display with better UX and retry option
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error-notification fixed top-4 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded z-50 max-w-md';
+                
+                let retryButton = '';
+                if (retryFunction) {
+                    retryButton = `
+                        <button onclick="handleRetry()" class="ml-2 px-2 py-1 bg-red-200 text-red-800 rounded text-sm hover:bg-red-300 transition-colors">
+                            Retry
+                        </button>
+                    `;
+                    // Store retry function globally for the button
+                    window.currentRetryFunction = retryFunction;
+                }
+                
+                errorDiv.innerHTML = `
+                    <div class="flex items-start">
+                        <i class="fas fa-exclamation-triangle mr-2 mt-0.5"></i>
+                        <div class="flex-1">
+                            <div class="text-sm">${message}</div>
+                            <div class="mt-2 flex items-center">
+                                ${retryButton}
+                                <button onclick="this.closest('.error-notification').remove()" class="ml-2 text-red-500 hover:text-red-700 text-sm">
+                                    <i class="fas fa-times"></i> Dismiss
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // Safely append to body
+                if (document.body) {
+                    document.body.appendChild(errorDiv);
+                    
+                    // Auto-remove after timeout (longer for retry errors)
+                    setTimeout(() => {
+                        try {
+                            if (errorDiv.parentElement) {
+                                errorDiv.remove();
+                            }
+                        } catch (e) {
+                            console.warn('Error auto-removing error notification:', e);
+                        }
+                    }, retryFunction ? 8000 : 5000);
+                } else {
+                    console.error('Cannot show error notification - document.body not available');
+                }
+                
+            } catch (error) {
+                console.error('Error showing error notification:', error);
+                // Fallback to alert if DOM manipulation fails
+                alert(`Error: ${message}`);
+            }
+        }
+
+        // Global retry handler
+        function handleRetry() {
+            console.log('Retry button clicked');
+            try {
+                if (window.currentRetryFunction) {
+                    // Remove error message safely
+                    const errorDiv = document.querySelector('.error-notification');
+                    if (errorDiv) {
+                        try {
+                            errorDiv.remove();
+                        } catch (e) {
+                            console.warn('Error removing error notification during retry:', e);
+                        }
+                    }
+                    
+                    // Execute retry
+                    const retryFn = window.currentRetryFunction;
+                    window.currentRetryFunction = null;
+                    retryFn();
+                }
+            } catch (error) {
+                console.error('Error during retry:', error);
+                showError('Retry failed. Please try again manually.');
+            }
+        }
+
+        // Cleanup function to prevent memory leaks
+        function cleanup() {
+            console.log('Performing cleanup...');
+            
+            // Cancel any pending requests
+            if (currentRequest) {
+                console.log('Cancelling pending request during cleanup');
+                currentRequest.abort();
+                currentRequest = null;
+            }
+            
+            // Clear any active timers
+            if (debounceTimer) {
+                clearTimeout(debounceTimer);
+                debounceTimer = null;
+            }
+            
+            // Clear retry function reference
+            if (window.currentRetryFunction) {
+                window.currentRetryFunction = null;
+            }
+            
+            // Reset state
+            isEvaluating = false;
+            
+            console.log('Cleanup completed');
+        }
+
+        // Enhanced cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            cleanup();
+        });
+
+        // Also cleanup on page hide (for mobile browsers)
+        window.addEventListener('pagehide', function() {
+            cleanup();
+        });
+
+        // Cleanup on visibility change (when tab becomes hidden)
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden && (currentRequest || debounceTimer)) {
+                console.log('Page hidden, performing cleanup');
+                cleanup();
+            }
+        });
+
+        // Handle Clear All with optional confirmation
+        function handleClearAllResults() {
+            console.log('Clear All button clicked, current results count:', allResults.length);
+            
+            // Optional confirmation for large number of results
+            if (allResults.length > 5) {
+                if (!confirm(`Are you sure you want to clear all ${allResults.length} results?`)) {
+                    console.log('User cancelled clear all operation');
+                    return;
+                }
+            }
+            
+            // Always call clearAllResults - let it handle the empty state
+            clearAllResults();
+        }
+    </script>
+</body>
+</html> 
